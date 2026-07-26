@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: lumira-backend
+
+server:
+  port: 8080
+
+# No datasource, JPA, or Flyway configuration yet — that's Step 2.
+# This file intentionally stays this small until there's something real
+# to configure; it will grow with each step rather than being fully
+# speculatively filled in now.
