@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lumira-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - lumira_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Optional but recommended (per project convention): a graphical way to
+  # inspect tables, verify migrations, and browse data without hand-writing
+  # SQL in a terminal. Not required for the application to run.
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: lumira-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - lumira_pgadmin_data:/var/lib/pgadmin
+
+volumes:
+  lumira_postgres_data:
+  lumira_pgadmin_data:
+
+# NOTE (Step 2 scope): the Spring Boot application itself is NOT a service
+# here yet — it still runs locally via `mvn spring-boot:run`, connecting to
+# this compose file's Postgres on localhost. Containerizing the app itself
+# (a Dockerfile, an "app" service here, true one-command startup for
+# everything) is a natural follow-up once there's real functionality beyond
+# a health check worth containerizing — not part of this step's agreed scope.

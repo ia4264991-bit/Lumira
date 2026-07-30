@@ -2,10 +2,39 @@ spring:
   application:
     name: lumira-backend
 
+  datasource:
+    # Host/port/name default to conventional local values purely for
+    # developer convenience — these aren't credentials. Username and
+    # password deliberately have NO fallback: if DB_USER/DB_PASSWORD aren't
+    # set, Spring fails to start with a clear placeholder-resolution error
+    # rather than silently running against a baked-in dev credential, per
+    # the "no hardcoded passwords, even in development" rule.
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:lumira}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    # Flyway owns the schema. Hibernate must never be allowed to create or
+    # alter tables itself — "validate" only checks that entity mappings
+    # match what Flyway has already migrated, and fails loudly if they
+    # don't, rather than silently improvising a schema. This is the single
+    # most common way to get Flyway+JPA wrong, so it's worth this comment.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
 server:
   port: 8080
 
-# No datasource, JPA, or Flyway configuration yet — that's Step 2.
-# This file intentionally stays this small until there's something real
-# to configure; it will grow with each step rather than being fully
-# speculatively filled in now.
+# No entities exist yet (Step 3), so there is nothing for Hibernate to
+# validate against yet either — that's expected and not an error; the point
+# of this step is proving the datasource connects and Flyway runs.

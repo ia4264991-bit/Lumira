@@ -1,0 +1,11 @@
+-- V1: Baseline migration for Vertical Slice 1.
+--
+-- Enables pgcrypto, which provides gen_random_uuid() — useful groundwork
+-- since every Chapter 3/4 entity uses UUID primary keys, regardless of
+-- whether UUID generation ultimately happens application-side (Hibernate)
+-- or database-side. IF NOT EXISTS makes this safely re-runnable.
+--
+-- Deliberately the only thing this baseline migration does: no tables yet.
+-- Step 3 introduces the actual Chapter 3/4 schema in its own migration(s),
+-- so each migration's diff stays small and reviewable.
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
