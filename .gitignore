@@ -1,20 +1,5 @@
-target/
-*.class
-
-# IDE
-.idea/
-*.iml
-.vscode/
-.settings/
-.classpath
-.project
-
-# OS
+# Root-level safety net; frontend/ and backend/ each have their own
+# more specific .gitignore for build tools, IDE files, etc.
 .DS_Store
-
-# Logs
 *.log
-
-# Local env overrides (Step 2+ will introduce env-driven DB config)
 .env
-application-local.yml
