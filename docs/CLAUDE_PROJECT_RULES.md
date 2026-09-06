@@ -152,3 +152,19 @@ and the authoritative document is updated — never before. This closes the
 gap Rule 4 leaves open: Rule 4 says don't invent an answer to an ambiguity;
 this rule says don't invent a fix to a genuine specification conflict either,
 even when the fix seems obviously correct.
+
+---
+
+## Revisions
+
+- 2026-09-06 — **One-time, explicit exception to Rule 9.** The product owner
+  authorized the specific chat session that had been serving as
+  Architecture/Integration for this project to also carry out the Backend
+  Step 3 implementation (University/Semester through read-only controllers),
+  rather than opening a separate Backend chat as Rule 9 otherwise requires.
+  This was flagged explicitly by that same session before proceeding, and
+  the product owner confirmed the override knowingly rather than it being
+  applied silently. **This is not a permanent change to the three-chat
+  structure** — Rule 9's role separation remains the default for all future
+  work. If this exception is invoked again, add another dated entry here
+  rather than treating this one as a standing precedent.
