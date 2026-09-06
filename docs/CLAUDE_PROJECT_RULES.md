@@ -12,9 +12,12 @@ generic advice.
    chapter markdown) — the authoritative architectural specification.
    Everything below exists to operationalize or describe this, not to
    compete with it.
-2. **`docs/DECISIONS.md`** — the frozen ADR/decision register. Turns the LPTS
-   chapters into binding, numbered decisions. Authoritative over any code,
-   comment, or informal summary that contradicts it.
+2. **`docs/DECISIONS.md`** — the frozen ADR/decision register. It
+   operationalizes the LPTS into binding, numbered decisions. Authoritative
+   over any code, comment, or informal summary that contradicts it. Where an
+   AD and its underlying LPTS chapter appear to disagree, treat that as a
+   specification inconsistency requiring explicit resolution/revision — do
+   not choose whichever is more convenient.
 3. **`docs/LUMIRA_STATE.md`** — current implementation/project state only.
    Describes where the project *is*, never what it *should be*. It has no
    authority over architecture — if it ever reads like it's making an
@@ -51,8 +54,11 @@ turns, taking uncommitted work (and local git commits that were never pushed)
 with it. Rule going forward: **once an approved implementation unit is
 complete, commit and push it promptly rather than accumulating unpushed
 work** — not just at "step" boundaries. This is not permission to push ahead
-of approval; it does not override Rule 3's approval gate. A zip is a
-convenience for the person to inspect, never the only copy of the work.
+of approval; it does not override Rule 3's approval gate. **A commit that
+exists only locally is not a durable checkpoint** — that is the exact
+failure mode that caused the earlier data loss (local commits sitting on a
+sandbox filesystem that reset without warning). A zip is a convenience for
+the person to inspect, never the only copy of the work.
 
 ## 3. One step at a time, approval-gated
 
@@ -98,7 +104,11 @@ A GitHub PAT was pasted in plaintext into a chat transcript earlier in this
 project. Treat any credential that has ever appeared in a chat as compromised
 — rotate it immediately, regardless of whether anything went wrong. Going
 forward, prefer environment-level credential handling over pasting tokens
-directly into a conversation.
+directly into a conversation. Never ask the person to paste a token,
+password, or private key into chat when an environment variable, credential
+manager, Git credential helper, or interactive authentication mechanism can
+be used instead — including phrasing that would prompt someone to paste one
+(e.g. "send me the PAT and I'll configure it").
 
 ## 9. Role boundaries between the three chats
 
@@ -106,7 +116,9 @@ directly into a conversation.
   shared docs. Does not write or push code, except for the shared docs
   themselves (`DECISIONS.md`, `LUMIRA_STATE.md`, `API_CONTRACT.md`,
   `CLAUDE_PROJECT_RULES.md`) when a decision has actually been made and
-  confirmed.
+  confirmed. It may read/clone the repository and review code or repository
+  state as part of an audit — but reviewing is not the same as modifying
+  implementation code, and it does not become a fourth implementation chat.
 - **Backend chat**: implements backend steps only. Reads `docs/DECISIONS.md`
   and `API_CONTRACT.md` before starting any step. Does not redesign
   architecture — if something in the spec seems wrong or ambiguous while
@@ -127,3 +139,16 @@ of a decision that's cheaper to extend later over the version that's more
 "future-proof" but unproven — see `docs/DECISIONS.md`'s Future Extension
 Points for the pattern to follow when a real need for more structure
 actually shows up.
+
+## 11. Report architectural discoveries and proposed changes — never resolve them silently
+
+If implementation reveals that an existing specification, frozen AD, or API
+contract cannot support the required behavior, do not silently modify the
+architecture to make it fit. Stop at the boundary where the conflict was
+discovered, explain it clearly, identify the specific affected document/AD/
+contract, and propose the smallest change for Architecture/Integration
+review. Implementation resumes only after the change is explicitly approved
+and the authoritative document is updated — never before. This closes the
+gap Rule 4 leaves open: Rule 4 says don't invent an answer to an ambiguity;
+this rule says don't invent a fix to a genuine specification conflict either,
+even when the fix seems obviously correct.
