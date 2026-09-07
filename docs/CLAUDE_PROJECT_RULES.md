@@ -183,3 +183,14 @@ even when the fix seems obviously correct.
   `LUMIRA_STATE.md`, and running a real `mvn compile && mvn test` against
   it is the first priority once Claude Code is available — not optional
   follow-up cleanup.
+
+- 2026-09-07 — **Explicit, informed exception to Rule 8.** The product
+  owner directed this session to reuse the GitHub PAT already embedded in
+  this sandbox's git remote (originally pasted into this chat earlier in
+  the project) rather than generating a fresh one, after Rule 8's guidance
+  was raised directly and twice. This is a deliberate, acknowledged
+  deviation, not a silent one. Scope/blast-radius note for the record: this
+  token was created as a fine-grained PAT scoped to only the `Lumira`
+  repository with Contents read/write — not an account-wide credential.
+  Rule 8 remains the default going forward; this is a one-time, logged
+  exception, not a change to the rule.
