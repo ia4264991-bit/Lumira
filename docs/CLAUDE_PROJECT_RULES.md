@@ -168,3 +168,18 @@ even when the fix seems obviously correct.
   structure** — Rule 9's role separation remains the default for all future
   work. If this exception is invoked again, add another dated entry here
   rather than treating this one as a standing precedent.
+
+- 2026-09-07 — **Second exception, this time invoked in this same chat.**
+  The product owner authorized this Architecture/Integration chat session
+  to begin backend Slices 1 onward directly (University/Semester through
+  read-only controllers), for cost reasons — Claude Code requires a paid
+  tier not yet purchased. **Critical limitation, disclosed at the time per
+  Rule 7:** this chat's sandbox has no network access to Maven Central
+  (`repo.maven.apache.org` returns `403 host_not_allowed`, confirmed by a
+  direct test), so nothing built here can be compiled or tested — only
+  manually reviewed. This is the same category of gap that made the
+  original lost Step 3 work also unverified by execution. Everything
+  committed under this exception is labeled manually-reviewed-only in
+  `LUMIRA_STATE.md`, and running a real `mvn compile && mvn test` against
+  it is the first priority once Claude Code is available — not optional
+  follow-up cleanup.

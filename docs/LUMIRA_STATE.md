@@ -36,10 +36,22 @@ into concepts that don't need it.
 |---|---|
 | Backend Step 1 (Spring Boot skeleton) | **Done, committed, pushed.** |
 | Backend Step 2 (Postgres/JPA/Flyway/Docker Compose, 11 module boundaries) | **Done, committed, pushed.** |
-| Backend Step 3 (Chapter 3/4 entities) | **Not committed to the repo.** A prior chat session built and lost this work twice to sandbox resets before ever pushing it — see `docs/DECISIONS.md` for the exact field-by-field spec to rebuild against. Now includes `CourseOfferingMembership` (AD-017), which an earlier draft had recommended skipping — that recommendation was reversed. |
+| Backend Step 3 (Chapter 3/4 entities) | **In progress, being rebuilt as of 2026-09-07 — see ⚠️ verification note below.** Field-by-field spec is in `docs/DECISIONS.md`. Includes `CourseOfferingMembership` (AD-017), which an earlier draft had recommended skipping — that recommendation was reversed. |
 | Backend Steps 4–7 (repositories, controllers, upload, Android integration) | Not started. |
 | Frontend | Fully built ahead of backend: PDF library/reader, Selection Engine (5 milestones complete, see `frontend/docs/engineering/`), Room persistence, auth screens, chat UI — all wired against `/v1/auth/*` and `/v1/ai/ask`, which don't exist on the backend yet. `DebugAuthBypass` exists specifically to work around this. Package name is still `com.aipdfreader.app` (pre-rebrand); the rename is a deliberately deferred, separate change. |
 | CourseSpace / Community architecture question | **Resolved — deferred, not built.** See `docs/DECISIONS.md` Future Extension Points. The only frozen principle is AD-018 (ownership ≠ sharing/visibility) — the sharing mechanism, schema, and target model are undecided and belong to the future Sharing chapter. |
+
+### ⚠️ Verification gap — read this before trusting any test claim from 2026-09-07 onward
+
+Backend Step 3 work starting 2026-09-07 was written in the Architecture chat's
+own sandbox, which **cannot reach Maven Central**
+(`repo.maven.apache.org` → `403 host_not_allowed`, confirmed directly). This
+means anything from this period marked "tests pass" or "verified" means
+**manually reviewed line-by-line only — never actually compiled or executed.**
+See `docs/CLAUDE_PROJECT_RULES.md` Revisions, 2026-09-07 entry, for the full
+disclosure. **The first thing any session with real Maven access (e.g.
+Claude Code) should do is run `mvn compile && mvn test` against everything
+committed under this exception**, not assume it already passed.
 
 ## Roadmap methodology
 
