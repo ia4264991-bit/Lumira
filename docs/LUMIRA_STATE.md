@@ -88,3 +88,70 @@ See `CLAUDE_PROJECT_RULES.md` for the operating rules each chat follows.
   rather than reusing one that's appeared in any chat transcript.
 - Frontend's `applicationId`/package rename (`com.aipdfreader.app` → Lumira's
   real namespace) is tracked but not scheduled.
+
+## Planned but not yet designed/scheduled
+
+Recorded here so ideas mentioned in passing don't quietly disappear — none
+of these are approved for implementation, just on record as intended:
+
+- **"Buy Course" and "Community" home-screen tabs** — initially ship as a
+  "Coming Soon" state with a short description only, no real functionality.
+  Cheap way to signal ambition and gauge interest before building either.
+  Note: "Community" already has a home in `docs/DECISIONS.md`'s Future
+  Extension Points (cross-institution/subject-level groups). "Buy Course" is
+  new territory — a marketplace/commerce concept (payments, seller/buyer
+  roles, pricing) not discussed anywhere else yet; deserves its own design
+  pass when it's actually scheduled, not to be assumed a small extension of
+  Community.
+- **AI Usage meter** ("Already used / Expected use" bar) — a core, reusable
+  UI pattern that should apply to *every* AI generation surface (quiz,
+  flashcards, Sarah, anything later), not a one-off for a single feature.
+  Directly answers the cost-per-generation concern below.
+- **Quiz / Flashcard generation UI** — natural next step once Sarah exists;
+  already scoped via the existing flashcard-schema-now/generation-deferred
+  decision.
+- **Audio Overview** (podcast-style, AI-narrated) — real roadmap item, but
+  sequenced *after* Card + Course Space are validated with real students,
+  not alongside initial build.
+- **Video Overview** — explicitly deferred, not default scope. Text-to-video
+  is currently the most expensive AI generation capability by a wide margin,
+  and generated video is also a real download-size problem on the
+  low-bandwidth connections this project's target market assumes. Revisit
+  as a conscious, likely paid-tier-only decision once there's revenue to
+  absorb the cost — not something to build just because a reference product
+  has it.
+- **Mastery tracking** (e.g. Unfamiliar → Learning → Familiar → Mastered,
+  filterable by subtopic, per-set progress) — surfaced by the Studley
+  competitive review below. Worth real consideration as a retention
+  mechanic independent of sharing/Course Space — it's the "come back and
+  keep studying" loop, which right now only Course Space's growth mechanics
+  (§17 of the Card/Course Space design doc) provide.
+
+## Competitive notes — Studley AI (checked 2026-09-08)
+
+Studley is the closest direct competitor identified so far: upload PDFs/
+slides/notes/video → generates flashcards, quizzes, fill-in-blank, written
+tests, tutor-mode explanations, and podcast audio from one "Study Set."
+Relevant findings, not yet acted on:
+
+- **Study Set → many study formats** is genuinely close to Lumira's
+  Card concept, and its zero-friction "upload once, generate immediately"
+  path is the bar Card's solo experience should match or beat.
+- **No real ownership/sharing boundary** — Studley is "private, then
+  optionally get a shareable link," which can't cleanly support scenarios
+  Lumira has already worked through (a lecturer publishing without
+  transferring ownership, two groups needing separate sharing spaces within
+  one course). This is where Card/Course Space's added complexity earns
+  its keep — but that complexity should only appear once a user actually
+  chooses to share, never before, to keep Card's solo path as simple as
+  Studley's.
+- **Flag — do not copy:** Studley's audio feature uses celebrity-style AI
+  voices (named public figures) without their involvement. Real
+  personality/publicity-rights legal exposure, independent of any AI-safety
+  concern. If Audio Overview is ever built, avoid this pattern entirely.
+- **Pricing/free-tier angle:** Studley's free tier is capped (one study set,
+  no card required) with real usage gated behind a ~$10–13/month paid tier.
+  Given this project's target market (cost-sensitive, African high schools),
+  a materially more generous free tier is a real potential differentiator
+  worth a deliberate pricing decision later — not just a feature gap to
+  note.
