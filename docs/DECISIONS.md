@@ -11,6 +11,20 @@ in meaning. Changes get a new dated Revision entry.
 
 ## NEW ARCHITECTURE — Card / Course Space / Sarah (live)
 
+> **Architectural philosophy (2026-09-12), governs everything below:**
+> "Don't over-engineer" means don't build capabilities the current product
+> doesn't justify — it does **not** mean build shallow foundations. The
+> target is *excellent foundations + a complete MVP + sensible
+> extensibility* — not a throwaway prototype, and not enterprise
+> infrastructure before there are users to justify it. Be rigorous about
+> domain boundaries, ownership, authorization, privacy, data integrity, API
+> contracts, persistence, event semantics, concurrency/idempotency where
+> relevant, error handling, security, AI context isolation, and
+> maintainability throughout. Do not build unnecessary microservices,
+> distributed systems, or infrastructure scaled for load this product does
+> not have. *(This refines, not replaces, `docs/CLAUDE_PROJECT_RULES.md`
+> Rule 10 — see that file's Revisions log for the cross-reference.)*
+
 ### Card (personal workspace)
 
 - **AD-019** — `Card` is the sole workspace entity in the domain model.
@@ -139,6 +153,97 @@ in meaning. Changes get a new dated Revision entry.
   RAG/retrieval implementation is most likely to violate by accident (e.g.
   "embed everything in this Course Space" would break it immediately).
 
+### Resolutions to OQ-1 through OQ-5 (2026-09-12)
+
+- **AD-029 (resolves OQ-1)** — A Card's full first-class content set is:
+  **Resources, Notes, Study Sets, Summaries, Quizzes, Flashcards, Sarah.**
+  `Study Set` is a distinct, first-class artifact type — it is **not** a
+  synonym for Card, and it is **not** a replacement for Course Space. This
+  supersedes AD-020's incomplete list (which was missing Study Sets and
+  Summaries) — AD-020 is not deleted, but treat this AD as the complete
+  version.
+
+- **AD-030 (cross-cutting — generalizes a pattern OQ-1 and OQ-4 both
+  independently pointed at)** — **Artifact identity never forks by sharing
+  context or by creation method.** A Quiz, Flashcard Set, Study Set,
+  Summary, or Note is exactly one entity type regardless of (a) whether
+  it's private or explicitly shared into a Course Space, and (b) whether a
+  human or Sarah created it. No `PersonalQuiz`/`CourseSpaceQuiz`,
+  `ManualFlashcard`/`AIFlashcard`, or similar type-forking. Ownership + a
+  per-item shared flag (AD-022) + an optional provenance attribute (AD-036)
+  are columns on one table per artifact type, never separate tables or
+  types. This generalizes the pattern already established for Resources in
+  AD-021.
+
+- **AD-031 (resolves OQ-2 — membership vs. ownership)** — Course Space
+  membership governs **access only, never ownership.** A user's Card and
+  every personally-owned artifact on it are entirely independent of that
+  user's Course Space membership status and **survive leaving or removal
+  unconditionally.** Nothing is ever auto-deleted; nothing is ever
+  auto-transferred to another user, including on removal by an Admin.
+
+- **AD-032 (resolves OQ-2 — lifecycle states)** — `card_membership.status`
+  is one of `INVITED`, `ACTIVE`, `LEFT`, `REMOVED`. `LEFT` (self-initiated)
+  and `REMOVED` (Owner/Admin-initiated) have **identical access effects**
+  (both revoke Course-Space-mediated access) and differ only in provenance,
+  recorded via the corresponding `MEMBER_LEFT`/`MEMBER_REMOVED` event
+  (AD-026 — no new event architecture needed, these types were already
+  seeded). Removal never grants the remover ownership of anything the
+  removed user owned.
+
+- **AD-033 (resolves OQ-2 — rejoin)** — Rejoining a Course Space creates a
+  **new `card_membership` row** (a fresh `INVITED`→`ACTIVE` lifecycle) but
+  must link to the user's **existing** Card — rejoining never destroys,
+  recreates, or forks a new Card or identity for a returning user.
+
+- **AD-034 (resolves OQ-3)** — Only the **Owner** may promote a Member to
+  Admin, demote an Admin to Member, remove an Admin, or remove a Member.
+  Admins cannot grant or revoke Admin status for anyone. The Owner cannot
+  be removed by an Admin. Exactly one Owner exists per Course Space in this
+  model — **no ownership-transfer operation exists yet.** If one is
+  introduced later it must be its own explicit, deliberate operation, never
+  an implicit side effect of an Admin action, and no transfer
+  infrastructure is being built as part of this pass.
+
+- **AD-035 (resolves OQ-4 — MVP scope)** — Sarah-driven generation of
+  Summaries, Flashcards, Quizzes, and Study Sets is **in scope for the
+  MVP** — not deferred on account of involving AI. Cost and access are
+  controlled through backend architecture (AD-037/AD-038), not by
+  withholding the feature.
+
+- **AD-036 (resolves OQ-4 — generated artifacts)** — A Sarah-generated
+  artifact is stored as an ordinary row of that artifact's normal type —
+  the same tables AD-030 establishes for manually created ones. Generation
+  method is at most a provenance attribute, never a distinct entity type.
+  Generated artifacts are immediately editable, studyable, and explicitly
+  shareable exactly like manually created ones.
+
+- **AD-037 (resolves OQ-4 — AI architecture/authority)** — The Android
+  client holds no model-provider credentials and performs no provider
+  selection — this reaffirms the frontend's existing thin-client principle
+  (`frontend/README.md`), now made explicit for generation specifically,
+  not only Q&A. Request flow: `User → Sarah → Backend AI Router → Context
+  Builder (authorized retrieval per AD-028) → Model Provider → generated
+  artifact persisted to the Card`. **AI usage metering and limit
+  enforcement are server-authoritative** — the Android client is never
+  trusted to calculate or enforce its own usage limits. The AI Usage meter
+  UI (already prototyped) must read a backend-computed value, not a
+  client-side count.
+
+- **AD-038 (resolves OQ-4 — extension points)** — The backend AI Router is
+  designed as a routing/abstraction layer from the outset — mirroring the
+  existing `StorageService` abstraction pattern already noted in
+  `storage/package-info.java` — specifically so free/premium allowance
+  tiers, multiple model providers, and additional AI capabilities can be
+  added later without a domain rewrite. **No payment/subscription system is
+  built as part of this architecture pass.**
+
+- **AD-039 (confirms OQ-5 — no change needed)** — AD-026's event-sourced
+  notification model is confirmed correct as originally designed; nothing
+  about it changes. Push-provider/badge/delivery specifics remain
+  implementation detail, correctly deferred to build time, not an
+  architectural gap.
+
 ### Deliberately left as an extension point, not designed now
 
 - **Offline/download capability** — the original design doc's distinction
@@ -150,28 +255,47 @@ in meaning. Changes get a new dated Revision entry.
 
 ---
 
-## Open questions — flagged for approval, not decided here
+## Open questions
 
-- **OQ-1 — What is a "Study Set"?** Distinct artifact type, or does it mean
-  something else (a bundle/collection, or a synonym for the Card itself as
-  in Studley)? Blocks AD-020 from being complete.
-- **OQ-2 — Membership lifecycle.** What happens to a member's auto-created
-  Card when they leave, are removed, or the Owner un-shares the Course
-  Space back to private? No precedent decided anywhere in this project's
-  history. Blocks building "leave" / "remove member" / "un-share."
-- **OQ-3 — Admin promotion/demotion.** Who can make a Member an Admin, and
-  can an Admin be demoted, by whom?
-- **OQ-4 — Quiz/Flashcard generation timing.** Earlier project history
-  deferred AI generation "until Sarah exists." Sarah is now a first-class
-  Card capability from day one in this architecture (AD-027). Does
-  generation come back into MVP scope, or does it stay deferred for a
-  different reason (cost, per the AI Usage meter concern already on
-  record)? This is a product scope call, not a technical one — flagging
-  rather than assuming either answer.
-- **OQ-5 — Notification delivery mechanics** (push service integration,
-  badge counts, read/unread UI behavior) — correctly an implementation
-  detail on top of AD-026's event model, not a blocking architectural gap.
-  Noted so it isn't mistaken for one.
+### Resolved 2026-09-12
+
+- ~~OQ-1 — What is a "Study Set"?~~ **Resolved by AD-029.**
+- ~~OQ-2 — Membership lifecycle.~~ **Resolved by AD-031, AD-032, AD-033.**
+- ~~OQ-3 — Admin promotion/demotion.~~ **Resolved by AD-034.**
+- ~~OQ-4 — Quiz/Flashcard generation timing.~~ **Resolved by AD-035,
+  AD-036, AD-037, AD-038.**
+- ~~OQ-5 — Notification delivery mechanics.~~ **Confirmed correct,
+  unchanged, by AD-039.**
+
+### New — surfaced while incorporating the above, not decided by them
+
+These are genuine gaps the OQ-1–5 resolutions didn't actually address, not
+contradictions between decisions — flagging per the instruction not to
+silently choose a side.
+
+- **OQ-6 — Does content survive the sharer leaving?** AD-031 says content a
+  user shared "is no longer exposed **to them** through that Course Space
+  membership" once they leave — but it doesn't say whether that content
+  remains visible **to the other, still-active members** of the Course
+  Space, or is withdrawn along with the sharer's own access. Both readings
+  are consistent with "nothing is automatically deleted" (the artifact
+  itself isn't deleted, that's not in question) — what's genuinely
+  undecided is whether its **shared flag** stays on or gets cleared when
+  the owner's membership ends. This has real product consequences: if it
+  stays shared, a Course Space's material could depend on former members
+  indefinitely; if it clears, other members could lose access to material
+  they were relying on the moment someone leaves.
+- **OQ-7 — What happens if the Owner leaves?** AD-034 establishes the Owner
+  cannot be *removed* by an Admin, and that there's no ownership-transfer
+  operation yet — but it doesn't address whether the Owner can *voluntarily
+  leave their own Course Space* the same way a Member can (AD-032's `LEFT`
+  status was defined generically for "a member"). If the Owner leaving is
+  disallowed, that needs to be an explicit rule (e.g. "Owner must transfer
+  or archive first" — but AD-034 explicitly says not to build transfer
+  infrastructure now, which would make an Owner's Course Space
+  un-leavable). If it's allowed, the Course Space becomes ownerless, which
+  no AD currently accounts for. Flagging rather than picking either
+  answer.
 
 ---
 
@@ -181,6 +305,9 @@ in meaning. Changes get a new dated Revision entry.
   for the Card/Course Space/Sarah model, following the retirement of the
   old academic-hierarchy register. Five open questions flagged rather than
   decided unilaterally.
+- 2026-09-12 — AD-029 through AD-039 added, resolving OQ-1 through OQ-5 per
+  explicit product-owner decisions. Two new gaps (OQ-6, OQ-7) surfaced
+  during incorporation and flagged rather than silently resolved.
 
 ---
 

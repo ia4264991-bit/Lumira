@@ -53,6 +53,13 @@ architecture item — see `docs/DECISIONS.md` AD-027** (Sarah's two entry
 points) — the new contract must add a `cardId` field to support Workspace
 Sarah.
 
+**Second known gap:** no generation endpoints (Summary/Flashcard/Quiz/Study
+Set) exist in any contract yet, and per **AD-037**, any such endpoint's
+response must carry a server-computed AI-usage value — the client must
+never calculate or enforce its own usage limit. The new contract needs
+this designed in from the start, not bolted on after a client-side counter
+already exists.
+
 ## Known temporary shims (still real, still present in the frontend)
 
 - **`DebugAuthBypass.kt`**: seeds a fake local session so the Reader/

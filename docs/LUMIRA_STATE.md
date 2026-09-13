@@ -46,11 +46,13 @@ the next task, not something this document should pre-empt.
 ## What's next
 
 1. This cleanup (retiring old architecture references) — done.
-2. Architecture completeness pass (Card/Course Space/Sarah) — **done,
-   2026-09-12, see `docs/DECISIONS.md` AD-019 through AD-028.** Five open
-   questions (OQ-1 through OQ-5) flagged there, pending product-owner
-   decision before the affected features can be built.
-3. Once OQ-1–4 are resolved: derive the actual API contract and backend
+2. Architecture completeness pass (Card/Course Space/Sarah) — done,
+   2026-09-12, see `docs/DECISIONS.md` AD-019 through AD-028.
+3. Resolution of OQ-1 through OQ-5 — **done, 2026-09-12, AD-029 through
+   AD-039.** Two new gaps surfaced during incorporation (OQ-6: does shared
+   content survive the sharer leaving; OQ-7: can the Owner leave their own
+   Course Space) — flagged, not yet decided.
+4. Once OQ-6/OQ-7 are resolved: derive the actual API contract and backend
    implementation plan from the now-decided architecture.
 
 ## Three-way collaboration structure

@@ -167,3 +167,13 @@ and the authoritative document is updated — never before.
   repository with Contents read/write — not an account-wide credential.
   Rule 8 remains the default going forward; this is a one-time, logged
   exception, not a change to the rule.
+
+- 2026-09-12 — **Clarification, not a change, to Rule 10.** "Under-build
+  rather than over-build" governs *scope* (which capabilities to build),
+  not *quality* (how rigorously to build what's in scope). See
+  `docs/DECISIONS.md`'s "Architectural philosophy" note, added the same
+  day: excellent foundations + a complete MVP + sensible extensibility —
+  not a shallow prototype, and not infrastructure scaled for load this
+  product doesn't have. Rule 10's original wording and example are
+  unchanged; this entry exists so the two documents don't drift apart on
+  what "don't over-engineer" is actually supposed to mean.
