@@ -1,93 +1,70 @@
 # Lumira — Project State
 
-**This file is a compact snapshot, not a specification.** For full detail see
-`docs/DECISIONS.md` (frozen architecture), `API_CONTRACT.md` (network
-boundary), and `Lumira.pdf` / LPTS chapters (full product vision). If any
-chat's own memory conflicts with what's in this repo, **the repo wins** — see
-`CLAUDE_PROJECT_RULES.md`.
+> ⚠️ **OLD ARCHITECTURE RETIRED — 2026-09-12.** This file's "What Lumira is,"
+> "Current state," and "Roadmap methodology" sections previously described
+> the academic-hierarchy architecture and its Step 1–7 backend rollout.
+> **That content has been retired** and is replaced below with the actual
+> current state: a UX prototype exists as the product reference, and a new
+> architecture has not yet been written around it. The "Planned but not yet
+> designed" and "Competitive notes" sections below predate this retirement
+> but describe the *new* direction, not the old one — they are preserved
+> unchanged.
 
-**This file describes status, not architecture.** It never overrides the LPTS
-chapters or `docs/DECISIONS.md`. If a sentence here ever reads like it's
-making an architectural decision rather than reporting current state, that's
-a bug in this file — fix the wording here, don't treat it as ground truth.
-See `CLAUDE_PROJECT_RULES.md` §0 for the full document hierarchy.
+**This file describes status, not architecture.** See
+`docs/CLAUDE_PROJECT_RULES.md` for how this file relates to other documents
+— that relationship is itself being redefined alongside the new
+architecture, not assumed to carry over unchanged from the old hierarchy.
 
 ---
 
-## What Lumira is
+## What Lumira is (current, accurate)
 
-A client-server academic platform: Android/Kotlin/Compose frontend, Spring
-Boot backend, PostgreSQL. Long-term product direction: academic organization
-+ course spaces + resource management + sharing + notes/highlights/bookmarks
-+ flashcards/quizzes + Sarah (AI tutor) + RAG + notifications + academic
-communities. Conceptually: Google Classroom + Notion + Quizlet + an AI tutor,
-with a future social layer. Designed to eventually extend beyond universities
-(e.g. SHS/high school) — avoid hard-coding "university"/"semester" vocabulary
-into concepts that don't need it.
+A study platform being rebuilt around a validated UX prototype: **Card**
+(private study workspace: Resources, Notes, AI/Sarah, Summaries, Quizzes,
+Flashcards) with **Course Space** as its sharing/collaboration layer (same
+underlying Card, membership + sharing enabled — not a separate entity).
+Sarah is a first-class, embedded workspace capability, not a bolt-on
+chatbot. Target market includes African high schools — mobile-first,
+offline/low-bandwidth-friendly, and cost-sensitive infrastructure
+considerations apply.
 
-## Repository
+**A formal architecture for this has not been written yet.** The UX
+prototype (an HTML/CSS/JS click-through, not committed to this repository)
+is the product/UX reference point. Building the architecture around it is
+the next task, not something this document should pre-empt.
 
-`github.com/ia4264991-bit/Lumira`, `master` branch, monorepo:
-`backend/`, `frontend/`, root-level shared docs.
-
-## Current state (as of this document)
+## Current repository state (accurate as of 2026-09-12)
 
 | Area | Status |
 |---|---|
-| Backend Step 1 (Spring Boot skeleton) | **Done, committed, pushed.** |
-| Backend Step 2 (Postgres/JPA/Flyway/Docker Compose, 11 module boundaries) | **Done, committed, pushed.** |
-| Backend Step 3 (Chapter 3/4 entities) | **In progress, being rebuilt as of 2026-09-07 — see ⚠️ verification note below.** Field-by-field spec is in `docs/DECISIONS.md`. Includes `CourseOfferingMembership` (AD-017), which an earlier draft had recommended skipping — that recommendation was reversed. |
-| Backend Steps 4–7 (repositories, controllers, upload, Android integration) | Not started. |
-| Frontend | Fully built ahead of backend: PDF library/reader, Selection Engine (5 milestones complete, see `frontend/docs/engineering/`), Room persistence, auth screens, chat UI — all wired against `/v1/auth/*` and `/v1/ai/ask`, which don't exist on the backend yet. `DebugAuthBypass` exists specifically to work around this. Package name is still `com.aipdfreader.app` (pre-rebrand); the rename is a deliberately deferred, separate change. |
-| CourseSpace / Community architecture question | **Resolved — deferred, not built.** See `docs/DECISIONS.md` Future Extension Points. The only frozen principle is AD-018 (ownership ≠ sharing/visibility) — the sharing mechanism, schema, and target model are undecided and belong to the future Sharing chapter. |
+| Backend | Spring Boot skeleton + Postgres/JPA/Flyway/Docker Compose infrastructure only. No domain entities of any kind exist. The old Step 3–7 roadmap is retired — see `backend/README.md`. |
+| Frontend | Real, working PDF-reader/auth/chat thin client (Selection Engine, Room persistence, auth screens, chat UI) — predates the Card/Course Space pivot, not yet rebuilt around it. See `frontend/README.md`. |
+| API contract | Retired — see `API_CONTRACT.md`. Old DTO shapes preserved there for historical reference only. |
+| Architecture decisions | Retired — see `docs/DECISIONS.md`. |
+| UX prototype | Exists as a standalone HTML/CSS/JS artifact (Card creation, resource add with processing states, Course Space creation/sharing/join simulation, Sarah with both workspace and contextual entry points). **Not committed to this repository** — it's a disposable testing tool, not a codebase to extend. |
 
-### ⚠️ Verification gap — read this before trusting any test claim from 2026-09-07 onward
+## What's next (per the product owner's direction, not yet executed)
 
-Backend Step 3 work starting 2026-09-07 was written in the Architecture chat's
-own sandbox, which **cannot reach Maven Central**
-(`repo.maven.apache.org` → `403 host_not_allowed`, confirmed directly). This
-means anything from this period marked "tests pass" or "verified" means
-**manually reviewed line-by-line only — never actually compiled or executed.**
-See `docs/CLAUDE_PROJECT_RULES.md` Revisions, 2026-09-07 entry, for the full
-disclosure. **The first thing any session with real Maven access (e.g.
-Claude Code) should do is run `mvn compile && mvn test` against everything
-committed under this exception**, not assume it already passed.
+1. This cleanup (retiring old architecture references) — done as of this
+   commit.
+2. Build a new architecture/document hierarchy specifically for the
+   prototype-first direction and for Antigravity as an implementation tool.
+3. Derive the new domain model, API contract, and backend plan from the UX
+   prototype plus the feature set below — not yet done.
 
-## Roadmap methodology
+## Three-way collaboration structure
 
-Draft → Vertical Slice → Validate → Freeze, one chapter (or logical group) at
-a time, **not** all specs frozen before any implementation. Each backend
-implementation step requires explicit approval before the next begins.
+Unchanged by this retirement — this is a workflow pattern, not part of the
+old domain architecture:
 
-**Sequencing (current agreement):**
-1. Rebuild Backend Step 3 from `docs/DECISIONS.md` (adds `CourseOfferingMembership`).
-2. Steps 4–5: repositories, REST controllers for Chapters 3+4.
-3. **Vertical Slice 1** = Chapters 3+4 end-to-end: Android's Library screen hitting real endpoints. Technical validation only — no real students yet.
-4. Freeze 3+4. Draft Chapter 5 (Study Artifacts: manual notes/highlights/bookmarks; flashcard **schema only**, generation deferred — it depends on Sarah).
-5. **Vertical Slice 2** — first real student validation, since there's finally something worth reacting to.
-6. Freeze 5. Draft Processing Pipeline (Ch.6), then Sarah (Ch.7) — in that order, since Sarah's retrieval depends on how content is chunked/embedded.
+| Role | Scope |
+|---|---|
+| **Architecture/Integration** (this chat) | Planning, audits, cross-cutting decisions, maintaining shared docs. Does not implement. |
+| **Backend implementation** (increasingly via Antigravity/Claude Code, not a browser chat) | Implements backend work, approval-gated. |
+| **Android implementation** (Android Studio / Gemini) | Implements frontend features. |
 
-## Three-chat structure
-
-| Chat | Role | Writes code? |
-|---|---|---|
-| **Architecture / Integration** (this one) | Planning, audits, cross-cutting decisions, reconciling the other two chats, maintaining shared docs | No |
-| **Backend** | Implements backend steps, one at a time, approval-gated | Yes — backend only |
-| **Android** | Implements frontend features | Yes — frontend only |
-
-See `CLAUDE_PROJECT_RULES.md` for the operating rules each chat follows.
-
-## Known open items
-
-- Frontend/backend integration is entirely unverified — nothing has ever
-  actually been compiled or run in a backend sandbox (Maven Central network
-  access has been unavailable in at least one prior sandbox). Verify this
-  early in any new backend session.
-- A GitHub PAT was pasted in plaintext in an earlier chat session and should
-  be treated as rotated/invalidated — always generate a fresh one per session
-  rather than reusing one that's appeared in any chat transcript.
-- Frontend's `applicationId`/package rename (`com.aipdfreader.app` → Lumira's
-  real namespace) is tracked but not scheduled.
+Whether this exact structure survives the new architecture's own document
+hierarchy is an open question for that upcoming work, not decided here.
 
 ## Planned but not yet designed/scheduled
 
@@ -96,62 +73,54 @@ of these are approved for implementation, just on record as intended:
 
 - **"Buy Course" and "Community" home-screen tabs** — initially ship as a
   "Coming Soon" state with a short description only, no real functionality.
-  Cheap way to signal ambition and gauge interest before building either.
-  Note: "Community" already has a home in `docs/DECISIONS.md`'s Future
-  Extension Points (cross-institution/subject-level groups). "Buy Course" is
-  new territory — a marketplace/commerce concept (payments, seller/buyer
-  roles, pricing) not discussed anywhere else yet; deserves its own design
-  pass when it's actually scheduled, not to be assumed a small extension of
-  Community.
+  "Community" is a cross-institution/subject-level concept distinct from
+  Course Space (different scale, discovery, moderation needs). "Buy Course"
+  is a marketplace/commerce concept (payments, seller/buyer roles) not
+  designed anywhere yet.
 - **AI Usage meter** ("Already used / Expected use" bar) — a core, reusable
-  UI pattern that should apply to *every* AI generation surface (quiz,
-  flashcards, Sarah, anything later), not a one-off for a single feature.
-  Directly answers the cost-per-generation concern below.
-- **Quiz / Flashcard generation UI** — natural next step once Sarah exists;
-  already scoped via the existing flashcard-schema-now/generation-deferred
-  decision.
-- **Audio Overview** (podcast-style, AI-narrated) — real roadmap item, but
-  sequenced *after* Card + Course Space are validated with real students,
-  not alongside initial build.
-- **Video Overview** — explicitly deferred, not default scope. Text-to-video
-  is currently the most expensive AI generation capability by a wide margin,
-  and generated video is also a real download-size problem on the
+  UI pattern for every AI generation surface (quiz, flashcards, Sarah),
+  already prototyped in the UX prototype.
+- **Quiz / Flashcard generation UI** — depends on Sarah; schema-first,
+  generation deferred until Sarah exists.
+- **Audio Overview** (podcast-style, AI-narrated) — sequenced after Card +
+  Course Space are validated with real students.
+- **Video Overview** — explicitly deferred; most expensive AI generation
+  capability by a wide margin, and a real download-size problem on the
   low-bandwidth connections this project's target market assumes. Revisit
   as a conscious, likely paid-tier-only decision once there's revenue to
-  absorb the cost — not something to build just because a reference product
-  has it.
-- **Mastery tracking** (e.g. Unfamiliar → Learning → Familiar → Mastered,
-  filterable by subtopic, per-set progress) — surfaced by the Studley
-  competitive review below. Worth real consideration as a retention
-  mechanic independent of sharing/Course Space — it's the "come back and
-  keep studying" loop, which right now only Course Space's growth mechanics
-  (§17 of the Card/Course Space design doc) provide.
+  absorb the cost.
+- **Mastery tracking** (Unfamiliar → Learning → Familiar → Mastered,
+  filterable, per-set progress) — a retention mechanic independent of
+  sharing, surfaced by the Studley competitive review below.
 
 ## Competitive notes — Studley AI (checked 2026-09-08)
 
 Studley is the closest direct competitor identified so far: upload PDFs/
 slides/notes/video → generates flashcards, quizzes, fill-in-blank, written
 tests, tutor-mode explanations, and podcast audio from one "Study Set."
-Relevant findings, not yet acted on:
 
-- **Study Set → many study formats** is genuinely close to Lumira's
-  Card concept, and its zero-friction "upload once, generate immediately"
-  path is the bar Card's solo experience should match or beat.
+- **Study Set → many study formats** is genuinely close to Lumira's Card
+  concept; its zero-friction "upload once, generate immediately" path is
+  the bar Card's solo experience should match or beat.
 - **No real ownership/sharing boundary** — Studley is "private, then
-  optionally get a shareable link," which can't cleanly support scenarios
-  Lumira has already worked through (a lecturer publishing without
-  transferring ownership, two groups needing separate sharing spaces within
-  one course). This is where Card/Course Space's added complexity earns
-  its keep — but that complexity should only appear once a user actually
-  chooses to share, never before, to keep Card's solo path as simple as
-  Studley's.
+  optionally get a shareable link." Card/Course Space's added complexity
+  (Owner/Admin/Member, explicit share vs. auto-share) earns its keep here —
+  but should only appear once a user actually chooses to share, never
+  before, to keep Card's solo path as simple as Studley's.
 - **Flag — do not copy:** Studley's audio feature uses celebrity-style AI
-  voices (named public figures) without their involvement. Real
-  personality/publicity-rights legal exposure, independent of any AI-safety
-  concern. If Audio Overview is ever built, avoid this pattern entirely.
-- **Pricing/free-tier angle:** Studley's free tier is capped (one study set,
-  no card required) with real usage gated behind a ~$10–13/month paid tier.
-  Given this project's target market (cost-sensitive, African high schools),
-  a materially more generous free tier is a real potential differentiator
-  worth a deliberate pricing decision later — not just a feature gap to
-  note.
+  voices (named public figures) without their involvement — real
+  personality/publicity-rights legal exposure. Avoid this pattern entirely
+  if Audio Overview is ever built.
+- **Pricing/free-tier angle:** Studley gates real use behind a ~$10–13/month
+  paid tier. Given this project's target market, a materially more
+  generous free tier is a real potential differentiator worth a deliberate
+  pricing decision later.
+
+## Known open items (unaffected by the architecture retirement)
+
+- A GitHub PAT was pasted in plaintext in an earlier chat session and
+  reused once since under an explicit, logged exception — treat any
+  credential that has ever appeared in a chat as compromised regardless of
+  this history; always prefer a fresh, narrowly-scoped token going forward.
+- Frontend's `applicationId`/package rename (`com.aipdfreader.app` →
+  Lumira's real namespace) is tracked but not scheduled.

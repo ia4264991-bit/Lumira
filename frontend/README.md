@@ -1,5 +1,14 @@
 # Lumira (Android) — Thin Client
 
+> ⚠️ **Status note — 2026-09-12.** This README accurately describes the
+> Android app's *current, real, existing* code: a PDF-reader/auth/chat thin
+> client. It predates the Card/Course Space/Sarah-as-workspace-capability
+> product pivot. **Treat the code descriptions below as accurate as of
+> today; do not treat the API contract it talks to (`/v1/auth/*`,
+> `/v1/ai/ask`) as the forward architecture** — see `API_CONTRACT.md`'s own
+> retirement notice and `docs/LUMIRA_STATE.md` for current direction. This
+> app has not yet been rebuilt around Card/Course Space.
+
 An Android app for opening PDFs, selecting text from them, and asking
 Sarah — the in-app AI assistant — questions about the selected passage.
 Built with Kotlin, Jetpack Compose, MVVM, and Room.
@@ -14,9 +23,11 @@ codebase) and hasn't been done here.*
 **This client holds no AI provider logic.** It authenticates against our own
 backend and sends it plain, descriptive requests ("the user selected this
 passage and asked this question"). The backend owns provider selection,
-prompt engineering, API keys, OCR, and context building. See
-`ENGINEERING_REPORT.md` for the full rationale and change log of this
-architecture.
+prompt engineering, API keys, OCR, and context building. *(A prior version
+of this README referenced an `ENGINEERING_REPORT.md` for further rationale
+— that file does not exist anywhere in this repository; treat that as a
+stale reference. `docs/engineering/` is the real, current engineering
+record — see §6 below.)*
 
 ---
 

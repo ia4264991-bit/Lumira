@@ -1,9 +1,14 @@
 /**
- * Reserved for LPTS Chapter 15 (Authentication &amp; Authorization).
+ * Retired old-architecture scope — 2026-09-12.
  *
- * <p>Empty in Vertical Slice 1 by design — no real authentication exists in
- * this slice. See the Vertical Slice 1 implementation notes for the
- * deliberate, minimal stand-in used elsewhere in the codebase until this
- * module is actually built.
+ * <p>This package previously held documentation-only scope for the retired
+ * academic-hierarchy architecture. No implementation was ever built here —
+ * this file was pure Javadoc, no classes. It has been rewritten to remove
+ * that stale scope description rather than leave it pointing an agent
+ * toward a retired plan.
+ *
+ * <p>See {@code docs/LUMIRA_STATE.md} in the repository root for current
+ * status. The new prototype-first architecture may reuse this package name,
+ * repurpose it, or leave it unused — that decision has not been made yet.
  */
 package com.lumira.backend.security;

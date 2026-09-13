@@ -6,13 +6,14 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 /**
  * Lumira platform backend entry point.
  *
- * <p>Implements Vertical Slice 1 of the Lumira Platform Technical
- * Specification (LPTS Chapters 3 &amp; 4: University Hierarchy and
- * Resources). See {@code docs/specification} in the platform repository for
- * the authoritative specification this backend implements.
+ * <p>Retired old-architecture reference removed 2026-09-12 — this class
+ * previously described itself as implementing an academic-hierarchy
+ * specification ("LPTS") that has since been retired. See
+ * {@code docs/LUMIRA_STATE.md} in the repository root for current status.
  *
- * <p>This is Step 1 of 8 in the incremental build-out of this slice: a bare
- * skeleton with no database, no entities, and no business logic yet.
+ * <p>Functionally unchanged: a Spring Boot application with Postgres/JPA/
+ * Flyway/Docker Compose infrastructure and a health check, no domain
+ * entities.
  */
 @SpringBootApplication
 public class LumiraBackendApplication {
