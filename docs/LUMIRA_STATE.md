@@ -43,14 +43,15 @@ the next task, not something this document should pre-empt.
 | Architecture decisions | Retired — see `docs/DECISIONS.md`. |
 | UX prototype | Exists as a standalone HTML/CSS/JS artifact (Card creation, resource add with processing states, Course Space creation/sharing/join simulation, Sarah with both workspace and contextual entry points). **Not committed to this repository** — it's a disposable testing tool, not a codebase to extend. |
 
-## What's next (per the product owner's direction, not yet executed)
+## What's next
 
-1. This cleanup (retiring old architecture references) — done as of this
-   commit.
-2. Build a new architecture/document hierarchy specifically for the
-   prototype-first direction and for Antigravity as an implementation tool.
-3. Derive the new domain model, API contract, and backend plan from the UX
-   prototype plus the feature set below — not yet done.
+1. This cleanup (retiring old architecture references) — done.
+2. Architecture completeness pass (Card/Course Space/Sarah) — **done,
+   2026-09-12, see `docs/DECISIONS.md` AD-019 through AD-028.** Five open
+   questions (OQ-1 through OQ-5) flagged there, pending product-owner
+   decision before the affected features can be built.
+3. Once OQ-1–4 are resolved: derive the actual API contract and backend
+   implementation plan from the now-decided architecture.
 
 ## Three-way collaboration structure
 

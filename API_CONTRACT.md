@@ -48,8 +48,10 @@
 **Known gap, worth carrying into the new contract design:** this shape has
 no field representing "which Card/Course Space grounds this conversation"
 for workspace-level Sarah entry (tap Sarah from inside a Card, no text
-selected) — only resource-selection-based context. The new architecture
-should account for this rather than silently inheriting the gap.
+selected) — only resource-selection-based context. **This is now a formal
+architecture item — see `docs/DECISIONS.md` AD-027** (Sarah's two entry
+points) — the new contract must add a `cardId` field to support Workspace
+Sarah.
 
 ## Known temporary shims (still real, still present in the frontend)
 
