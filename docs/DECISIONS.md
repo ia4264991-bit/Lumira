@@ -108,8 +108,9 @@ in meaning. Changes get a new dated Revision entry.
   `MEMBER_LEFT`, `MEMBER_REMOVED`, `ANNOUNCEMENT_POSTED`. *(Extended
   2026-09-12, additively — the type list was always open/non-exhaustive by
   design, so this isn't a meaning change: `MEMBER_PROMOTED`,
-  `MEMBER_DEMOTED`, `OWNERSHIP_TRANSFERRED` (AD-042), and
-  `CONTENT_UNSHARED` (AD-040) are now known-needed types.)* This single log
+  `MEMBER_DEMOTED`, `OWNERSHIP_TRANSFERRED` (AD-042), `CONTENT_UNSHARED`
+  (AD-040), and `CONTENT_FORCE_UNSHARED` (AD-046) are now known-needed
+  types.)* This single log
   serves two purposes from one source of truth:
   1. Rendered directly as the human-readable **Updates feed** inside the
      Course Space.
@@ -293,6 +294,58 @@ in meaning. Changes get a new dated Revision entry.
   X") — no multi-step approval workflow, no transfer requests/invitations,
   no voting or bidding. Nothing beyond this is built for the MVP.
 
+### Resolution to OQ-8 (2026-09-12)
+
+- **AD-044 (resolves OQ-8 — authorization)** — The **artifact owner** may
+  unshare their own artifact from a Course Space at any time, regardless
+  of their Course Space role. The **Course Space Owner** may
+  force-unshare any shared artifact. **Course Space Admins** may
+  force-unshare a shared artifact, but only for a required, structured
+  moderation reason (AD-047) — Admin force-unshare authority is
+  conditioned on stating why; the Owner's is not. **Ordinary Members may
+  not** withdraw content they don't own. Force-unsharing (by Owner or
+  Admin) never deletes the artifact, never changes its ownership, and only
+  removes it from that one Course Space — the artifact continues to exist,
+  fully intact, in its owner's own Card (see AD-045 for why this is
+  mechanically true, not just a stated intention). Force-unshare authority
+  grants **nothing beyond** removing the share link — never a right to
+  edit, delete, transfer, or claim the artifact itself.
+
+- **AD-045 (mechanism — clarifies, does not contradict, AD-022)** —
+  "Sharing" is modeled as an **explicit share record** linking an
+  artifact to the Course Space it's exposed through, not a same-row
+  boolean flag on the artifact itself. This is the same reference-based
+  approach AD-021/AD-025 already use for Resources, now made explicit as
+  the general mechanism for every shareable artifact type. It's also what
+  makes AD-040's own phrase — "the Course Space's own sharing record" —
+  and AD-044's "removes it from that Course Space only, artifact remains
+  in owner's Card" mechanically coherent: unsharing or force-unsharing
+  deletes/deactivates the share record, and never touches the artifact's
+  own row. AD-022's product-level statement (defaults, per-item toggle) is
+  unchanged — this is the persistence mechanism underneath it, not a
+  revision of it.
+
+- **AD-046 (resolves OQ-8 — distinguishability and events)** — Two
+  distinguishable event types extend the existing `CourseSpaceEvent` log
+  (AD-026): `CONTENT_UNSHARED` (owner-initiated, no reason required) and
+  `CONTENT_FORCE_UNSHARED` (Owner/Admin-initiated, reason required). Every
+  such event records actor, Course Space, affected artifact, operation
+  type, and timestamp — all already-standard `CourseSpaceEvent` fields —
+  plus, for `CONTENT_FORCE_UNSHARED` specifically, a structured moderation
+  reason and optional free-text note (AD-047) in the event's `payload`.
+  The artifact's owner receives a notification when their content is
+  force-unshared — this is an ordinary consequence of AD-026's existing
+  "notifications derive from events" design, not a new notification
+  mechanism.
+
+- **AD-047 (resolves OQ-8 — moderation reason taxonomy)** — Moderation
+  reason is an open, string-backed category (the same extensibility
+  pattern already used for `resourceType` and event `type`), seeded with:
+  `COPYRIGHT`, `PRIVACY`, `SAFETY`, `ABUSE`, `MALICIOUS_CONTENT`,
+  `POLICY_VIOLATION`, `OTHER`, with an optional accompanying free-text
+  note. Required on `CONTENT_FORCE_UNSHARED`; not applicable to ordinary
+  owner-initiated `CONTENT_UNSHARED`.
+
 ### Deliberately left as an extension point, not designed now
 
 - **Offline/download capability** — the original design doc's distinction
@@ -324,16 +377,17 @@ in meaning. Changes get a new dated Revision entry.
 - ~~OQ-7 — Can the Owner leave?~~ **Resolved by AD-042/AD-043: only after
   an explicit ownership transfer. No ownerless Course Space, ever.**
 
-### New — surfaced while incorporating the above, not decided by them
+### Resolved 2026-09-12 (third pass)
 
-- **OQ-8 — Who may withdraw someone else's shared content?** AD-040
-  establishes that withdrawing shared content requires an explicit
-  unshare/remove-from-Course-Space operation, but doesn't say who besides
-  the original sharer may invoke it. Can an Owner/Admin force-unshare a
-  resource *someone else* contributed — e.g. for moderation — or is
-  unsharing solely the original sharer's own privilege? Genuinely
-  undecided; flagging rather than assuming a moderation power exists or
-  doesn't.
+- ~~OQ-8 — Who may withdraw someone else's shared content?~~ **Resolved by
+  AD-044/AD-046/AD-047: artifact owner unshares their own; Course Space
+  Owner may force-unshare anything; Admins may force-unshare only with a
+  required, structured moderation reason; ordinary Members cannot
+  withdraw others' content.**
+
+**No new open question surfaced this pass** — the resolution was complete
+enough on its own terms that it didn't reveal a further gap the way each
+of the previous three passes did.
 
 ---
 
@@ -352,6 +406,9 @@ in meaning. Changes get a new dated Revision entry.
   itself was not rewritten; the supersession is noted inline on AD-034 and
   recorded here. One new gap (OQ-8) surfaced and flagged rather than
   decided unilaterally.
+- 2026-09-12 — AD-044 through AD-047 added, resolving OQ-8 per explicit
+  product-owner decisions. AD-045 clarifies (does not contradict) AD-022's
+  mechanism. No new gap surfaced this pass.
 
 ---
 

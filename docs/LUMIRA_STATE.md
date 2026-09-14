@@ -50,13 +50,15 @@ the next task, not something this document should pre-empt.
    2026-09-12, see `docs/DECISIONS.md` AD-019 through AD-028.
 3. Resolution of OQ-1 through OQ-5 — done, 2026-09-12, AD-029 through
    AD-039.
-4. Resolution of OQ-6 and OQ-7 — **done, 2026-09-12, AD-040 through
-   AD-043.** One new, narrow gap surfaced (OQ-8: who besides an artifact's
-   own owner may withdraw it from a Course Space — moderation power or
-   not). Not yet decided.
-5. Once OQ-8 is resolved (or explicitly deferred as non-blocking, since
-   it's narrower than the prior gaps): derive the actual API contract and
-   backend implementation plan from the now-decided architecture.
+4. Resolution of OQ-6 and OQ-7 — done, 2026-09-12, AD-040 through AD-043.
+5. Resolution of OQ-8 — **done, 2026-09-12, AD-044 through AD-047.** No
+   new open question surfaced this pass — all eight flagged questions from
+   this architecture round are now resolved.
+6. Next: derive the actual API contract and backend implementation plan
+   from the now-decided architecture. No further architectural gap is
+   currently blocking that — this is a good point to move from "resolve
+   open questions" to "design the contract/schema" if there's nothing else
+   to flag.
 
 ## Three-way collaboration structure
 
