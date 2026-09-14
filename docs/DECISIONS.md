@@ -105,7 +105,11 @@ in meaning. Changes get a new dated Revision entry.
   `createdAt`, `payload` JSON). `type` is an open, string-backed category
   (same pattern as the old, independently-good `resourceType` design),
   seeded with: `RESOURCE_ADDED`, `ARTIFACT_SHARED`, `MEMBER_JOINED`,
-  `MEMBER_LEFT`, `MEMBER_REMOVED`, `ANNOUNCEMENT_POSTED`. This single log
+  `MEMBER_LEFT`, `MEMBER_REMOVED`, `ANNOUNCEMENT_POSTED`. *(Extended
+  2026-09-12, additively — the type list was always open/non-exhaustive by
+  design, so this isn't a meaning change: `MEMBER_PROMOTED`,
+  `MEMBER_DEMOTED`, `OWNERSHIP_TRANSFERRED` (AD-042), and
+  `CONTENT_UNSHARED` (AD-040) are now known-needed types.)* This single log
   serves two purposes from one source of truth:
   1. Rendered directly as the human-readable **Updates feed** inside the
      Course Space.
@@ -203,7 +207,11 @@ in meaning. Changes get a new dated Revision entry.
   model — **no ownership-transfer operation exists yet.** If one is
   introduced later it must be its own explicit, deliberate operation, never
   an implicit side effect of an Admin action, and no transfer
-  infrastructure is being built as part of this pass.
+  infrastructure is being built as part of this pass. *(⚠️ The "no transfer
+  infrastructure being built now" clause is superseded by AD-042 below,
+  2026-09-12, once OQ-7 required a minimal transfer operation as part of
+  the Owner-leave lifecycle. Every other rule in this AD is unchanged and
+  still in force.)*
 
 - **AD-035 (resolves OQ-4 — MVP scope)** — Sarah-driven generation of
   Summaries, Flashcards, Quizzes, and Study Sets is **in scope for the
@@ -244,6 +252,47 @@ in meaning. Changes get a new dated Revision entry.
   implementation detail, correctly deferred to build time, not an
   architectural gap.
 
+### Resolutions to OQ-6 and OQ-7 (2026-09-12)
+
+- **AD-040 (resolves OQ-6)** — Sharing survives the sharer's departure.
+  Once a Resource or artifact is explicitly shared into a Course Space,
+  its continued visibility there is governed by the **Course Space's own
+  sharing record**, not by the sharer's continued membership. The sharer
+  keeps ownership; loses Course Space access on leaving; does **not**
+  automatically regain access merely by owning content still shared there.
+  Withdrawing previously shared content requires an explicit
+  unshare/remove-from-Course-Space operation — see OQ-8 for who exactly
+  may invoke it, which this decision doesn't fully specify.
+
+- **AD-041 (formalizes the separation OQ-6 and OQ-7 both depend on)** —
+  Four axes must never be conflated: **Ownership** (who owns a Card/
+  artifact — AD-021/AD-031), **Sharing** (which of an owner's artifacts are
+  exposed into a Course Space — AD-022, AD-040), **Membership** (who
+  currently has Course Space access, and its lifecycle state — AD-032),
+  and **Administration** (which members hold Owner/Admin authority —
+  AD-023/AD-034). A change on one axis must never implicitly change
+  another: losing membership doesn't touch ownership; owning content
+  doesn't grant membership; holding Admin authority doesn't grant
+  ownership of anyone else's content.
+
+- **AD-042 (resolves OQ-7 — supersedes AD-034's "no transfer" clause)** —
+  The Owner **cannot leave while still Owner.** Ownership transfer is a
+  required, minimal operation: only the current Owner may initiate it,
+  targeting exactly one specific, already-existing eligible member (no
+  self-transfer, no automatic or random assignment); it must be explicit
+  and auditable as a `OWNERSHIP_TRANSFERRED` event (AD-026's event log,
+  extending its seeded type list). On successful transfer, the new member
+  becomes Owner and the previous Owner's role becomes Admin or Member per
+  the transfer operation's own specification. Only **after** a successful
+  transfer may the previous Owner leave via the ordinary `LEFT` pathway
+  (AD-032). There is exactly one Owner at all times — an ownerless Course
+  Space is never permitted, and ownership is never auto-assigned.
+
+- **AD-043 (keep-it-minimal boundary on AD-042)** — The transfer operation
+  is intentionally a single atomic action ("transfer ownership to member
+  X") — no multi-step approval workflow, no transfer requests/invitations,
+  no voting or bidding. Nothing beyond this is built for the MVP.
+
 ### Deliberately left as an extension point, not designed now
 
 - **Offline/download capability** — the original design doc's distinction
@@ -257,7 +306,7 @@ in meaning. Changes get a new dated Revision entry.
 
 ## Open questions
 
-### Resolved 2026-09-12
+### Resolved 2026-09-12 (first pass)
 
 - ~~OQ-1 — What is a "Study Set"?~~ **Resolved by AD-029.**
 - ~~OQ-2 — Membership lifecycle.~~ **Resolved by AD-031, AD-032, AD-033.**
@@ -267,35 +316,24 @@ in meaning. Changes get a new dated Revision entry.
 - ~~OQ-5 — Notification delivery mechanics.~~ **Confirmed correct,
   unchanged, by AD-039.**
 
+### Resolved 2026-09-12 (second pass)
+
+- ~~OQ-6 — Does content survive the sharer leaving?~~ **Resolved by
+  AD-040: yes, sharing state governs visibility, independent of the
+  sharer's membership.**
+- ~~OQ-7 — Can the Owner leave?~~ **Resolved by AD-042/AD-043: only after
+  an explicit ownership transfer. No ownerless Course Space, ever.**
+
 ### New — surfaced while incorporating the above, not decided by them
 
-These are genuine gaps the OQ-1–5 resolutions didn't actually address, not
-contradictions between decisions — flagging per the instruction not to
-silently choose a side.
-
-- **OQ-6 — Does content survive the sharer leaving?** AD-031 says content a
-  user shared "is no longer exposed **to them** through that Course Space
-  membership" once they leave — but it doesn't say whether that content
-  remains visible **to the other, still-active members** of the Course
-  Space, or is withdrawn along with the sharer's own access. Both readings
-  are consistent with "nothing is automatically deleted" (the artifact
-  itself isn't deleted, that's not in question) — what's genuinely
-  undecided is whether its **shared flag** stays on or gets cleared when
-  the owner's membership ends. This has real product consequences: if it
-  stays shared, a Course Space's material could depend on former members
-  indefinitely; if it clears, other members could lose access to material
-  they were relying on the moment someone leaves.
-- **OQ-7 — What happens if the Owner leaves?** AD-034 establishes the Owner
-  cannot be *removed* by an Admin, and that there's no ownership-transfer
-  operation yet — but it doesn't address whether the Owner can *voluntarily
-  leave their own Course Space* the same way a Member can (AD-032's `LEFT`
-  status was defined generically for "a member"). If the Owner leaving is
-  disallowed, that needs to be an explicit rule (e.g. "Owner must transfer
-  or archive first" — but AD-034 explicitly says not to build transfer
-  infrastructure now, which would make an Owner's Course Space
-  un-leavable). If it's allowed, the Course Space becomes ownerless, which
-  no AD currently accounts for. Flagging rather than picking either
-  answer.
+- **OQ-8 — Who may withdraw someone else's shared content?** AD-040
+  establishes that withdrawing shared content requires an explicit
+  unshare/remove-from-Course-Space operation, but doesn't say who besides
+  the original sharer may invoke it. Can an Owner/Admin force-unshare a
+  resource *someone else* contributed — e.g. for moderation — or is
+  unsharing solely the original sharer's own privilege? Genuinely
+  undecided; flagging rather than assuming a moderation power exists or
+  doesn't.
 
 ---
 
@@ -308,6 +346,12 @@ silently choose a side.
 - 2026-09-12 — AD-029 through AD-039 added, resolving OQ-1 through OQ-5 per
   explicit product-owner decisions. Two new gaps (OQ-6, OQ-7) surfaced
   during incorporation and flagged rather than silently resolved.
+- 2026-09-12 — AD-040 through AD-043 added, resolving OQ-6 and OQ-7 per
+  explicit product-owner decisions. This pass superseded one clause of
+  AD-034 (its "no transfer infrastructure being built" statement) — AD-034
+  itself was not rewritten; the supersession is noted inline on AD-034 and
+  recorded here. One new gap (OQ-8) surfaced and flagged rather than
+  decided unilaterally.
 
 ---
 
