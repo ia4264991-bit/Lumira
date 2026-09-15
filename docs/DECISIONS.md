@@ -75,6 +75,13 @@ in meaning. Changes get a new dated Revision entry.
   (zero or more), **Member** (zero or more). Admins may add Resources
   (shared by default per AD-022) and share the existing invite link. Only
   the Owner may remove members and archive/un-share the Course Space.
+  *(Terminology note, added 2026-09-12: this is the same operation AD-051
+  names and further defines as "dissolve" — use "dissolve" as the
+  canonical term going forward. AD-023's original wording never actually
+  distinguished a reversible "archive" state from a permanent one; that
+  distinction is not decided either way and is not being invented here —
+  if reversible archiving is ever wanted as a separate capability, it
+  needs its own explicit decision, not an assumption in either direction.)*
   - **Persistence:** `card_membership` (`id`, `cardId`, `userId`, `role`,
     `joinedAt`).
   - **Open question:** Admin promotion/demotion mechanics — see OQ-3.
@@ -109,8 +116,8 @@ in meaning. Changes get a new dated Revision entry.
   2026-09-12, additively — the type list was always open/non-exhaustive by
   design, so this isn't a meaning change: `MEMBER_PROMOTED`,
   `MEMBER_DEMOTED`, `OWNERSHIP_TRANSFERRED` (AD-042), `CONTENT_UNSHARED`
-  (AD-040), and `CONTENT_FORCE_UNSHARED` (AD-046) are now known-needed
-  types.)* This single log
+  (AD-040), `CONTENT_FORCE_UNSHARED` (AD-046), and `COURSE_SPACE_DISSOLVED`
+  (AD-051) are now known-needed types.)* This single log
   serves two purposes from one source of truth:
   1. Rendered directly as the human-readable **Updates feed** inside the
      Course Space.
@@ -346,6 +353,136 @@ in meaning. Changes get a new dated Revision entry.
   note. Required on `CONTENT_FORCE_UNSHARED`; not applicable to ordinary
   owner-initiated `CONTENT_UNSHARED`.
 
+### Resolutions from external red-team adjudication (2026-09-12)
+
+**AD-019 reviewed, not reopened.** Verified against every AD that depends
+on it (AD-021, AD-025, AD-031, AD-033, AD-040, AD-045). No genuine
+domain/security contradiction found — the Card-as-Course-Space model
+remains internally coherent, and the external proposal to split
+`CourseSpace` into a distinct aggregate restates a design already
+considered and rejected earlier in this project (the same over-structuring
+pattern caught once for the original `Workspace` entity), without new
+evidence specific to a validated Lumira need. **AD-019 stands unchanged.**
+See Revisions below for the full record of this review.
+
+- **AD-048 (Card multiplicity — rejects an external proposal)** — A User
+  may own **zero or more** personal Cards; each Card has exactly one owner
+  (AD-021's User-ownership branch). There is **no** "exactly one primary
+  Card per user" constraint. This explicitly rejects an external red-team
+  proposal that would have contradicted the validated UX prototype's
+  repeatable Create-Card flow and its own multi-Card examples ("Operating
+  Systems," "Database Systems," "My AI Notes" coexisting for one user).
+  Nothing about AD-019's persistence model (`ownerId` as a plain per-row
+  reference) ever actually constrained cardinality — this AD makes
+  explicit what was already structurally true rather than changing
+  anything.
+
+- **AD-049 (account deletion — private data)** — On account deletion, all
+  of a User's private (non-shared) data is permanently deleted: every
+  personal Card the user owns in full — including all private artifacts
+  (Resources, Notes, Study Sets, Summaries, Quizzes, Flashcards) not
+  currently exposed via an active share record — Sarah's private
+  conversation/session history and any private derived AI data (e.g.
+  embeddings) tied to that history, and all active authentication
+  sessions. This is the default; the one carve-out (artifacts currently
+  shared into an active Course Space) is defined explicitly in AD-050, not
+  silently assumed. *(Note: AD-022 permits Sarah conversations to be
+  explicitly shared via the same per-item toggle as other artifacts — never
+  actually built or exercised anywhere, but if it ever is, a shared Sarah
+  conversation follows AD-050's rule below like any other shared artifact,
+  not this AD's default-delete rule. Flagging for consistency; not deciding
+  a new feature.)*
+
+- **AD-050 (account deletion — shared artifact survival mechanism)** — An
+  artifact — used here in AD-022's sense (Resources, Notes, Study Sets,
+  Summaries, Quizzes, Flashcards, **and Sarah conversations**, since AD-022
+  already treats Sarah conversations as subject to the same private/shared
+  toggle as everything else) — currently linked by an active share record
+  (AD-045) into at least one Course Space is **not** deleted merely
+  because its owner's account is deleted — doing so would silently violate
+  AD-040's "sharing survives departure" guarantee, and would let a shared
+  Sarah conversation fall through the deletion policy specifically.
+  Resolution: at the moment of account
+  deletion, such an artifact's owning-Card reference (AD-021) is
+  **reassigned to the Course Space's own Card** (i.e., the current Course
+  Space Owner's Card) — never to a placeholder/sentinel identity. This
+  reuses the existing Card-ownership mechanism rather than inventing a new
+  identity concept, and keeps ownership always attributable to a real,
+  live Card, consistent with AD-041. Applies only to artifacts with an
+  active share record at the moment of deletion; a deleting user is never
+  the Course Space's sole Owner at this point (AD-051 guarantees that
+  precondition already), so the reassignment target always belongs to
+  someone else.
+
+- **AD-051 (account deletion — Course Space ownership precondition)** — A
+  User may not complete account deletion while they remain the sole Owner
+  of any active Course Space. Before deletion can proceed, the user must
+  either explicitly transfer ownership (AD-042/AD-043) to an eligible
+  existing member, or explicitly dissolve the Course Space. There is never
+  an ownerless active Course Space (reaffirms AD-042). If dissolved with
+  other active members remaining, dissolution ends only collaborative
+  state (membership, shared visibility) — it never touches any member's
+  own personally-owned content, including the deleting Owner's own Card
+  (AD-031).
+
+- **AD-052 (account deletion — event/audit history retention)** —
+  Historical `CourseSpaceEvent` records (AD-026) referencing a deleted
+  user as `actorUserId` are **retained**, never deleted or rewritten, for
+  Course Space auditability. The exact representation of a reference to a
+  now-deleted identity is an implementation detail, not a domain decision
+  — the domain rule is only: retain the event, minimize retained personal
+  information beyond what auditability requires, never cascade-delete a
+  Course Space's event log because one past actor's account was later
+  deleted. *(Extends AD-026's event types additively with
+  `COURSE_SPACE_DISSOLVED`, needed for AD-051.)*
+
+- **AD-053 (Quiz/Flashcard — canonical artifact vs. personal study
+  state)** — A canonical artifact (a Quiz or Flashcard Set — AD-029/030) is
+  conceptually distinct from a user's personal execution/progress state
+  against it. At minimum, the domain must support: `Quiz` (canonical
+  structure/content) vs. a per-user `QuizAttempt` (one user's attempt/
+  answers/score against a specific Quiz); `FlashcardSet` (canonical
+  content) vs. per-user flashcard progress/review state. **This does not
+  reopen AD-030** — there is still exactly one Quiz artifact regardless of
+  context; only the attempt/progress records are user-specific and
+  separate from it. Exact schema (e.g. how an attempt binds to a specific
+  content version, review-state algorithm) is explicitly deferred — only
+  the domain boundary itself (canonical artifact ≠ personal state) must
+  exist before Quiz/Flashcard implementation begins.
+
+- **AD-054 (Sarah — authorization before retrieval)** — Sarah's
+  context-retrieval pipeline must determine what the requesting user is
+  authorized to access **before** any content enters retrieval — never
+  retrieve first and filter or rely on the model afterward. This formalizes
+  AD-028's boundary with an explicit sequencing requirement AD-028 didn't
+  spell out on its own: authorization is a precondition of retrieval, not
+  a post-hoc filter, and the LLM is never responsible for enforcing it.
+
+- **AD-055 (Sarah — output is untrusted)** — Sarah-generated output must be
+  treated as untrusted input, the same category as any other
+  unauthenticated data source. Before persistence as a Lumira artifact
+  (AD-036) or use as domain data, output must pass structural/schema
+  validation, domain validation, and security/input validation. A
+  generated result never bypasses ordinary domain rules merely because
+  Sarah produced it. Formalizes and extends AD-036/AD-037. Specific
+  validator implementations are out of scope for this AD.
+
+- **AD-056 (domain truth and deterministic authorization)** — Authoritative
+  domain state (the backend's own persisted records) determines Lumira's
+  domain truth and all authorization decisions. Derived/downstream systems
+  — caches, search/vector indexes, object storage metadata, queues, AI
+  providers, client-side state — may support the system operationally but
+  must **never** independently grant or expand access beyond what current
+  domain state permits. Authorization must be evaluated by backend/domain
+  logic against **live** state, never inferred from: LLM output,
+  client-supplied claims, cached permissions, stale membership data, or
+  the mere existence/ID of an object (guards against BOLA/IDOR-shaped
+  bugs). This is the general, foundational principle that AD-021/AD-028/
+  AD-032/AD-041/AD-044 are all specific instances of — it replaces none of
+  them. Specific enforcement mechanisms (a security framework, a
+  policy-service pattern, a cache-invalidation strategy) are deferred to
+  engineering/architecture documentation, not frozen here.
+
 ### Deliberately left as an extension point, not designed now
 
 - **Offline/download capability** — the original design doc's distinction
@@ -409,6 +546,19 @@ of the previous three passes did.
 - 2026-09-12 — AD-044 through AD-047 added, resolving OQ-8 per explicit
   product-owner decisions. AD-045 clarifies (does not contradict) AD-022's
   mechanism. No new gap surfaced this pass.
+- 2026-09-12 — External red-team review (ChatGPT + Gemini) adjudicated.
+  **AD-019 reviewed against its full dependency chain (AD-021, AD-025,
+  AD-031, AD-033, AD-040, AD-045) and reaffirmed unchanged** — no genuine
+  contradiction found; the proposed distinct-`CourseSpace`-aggregate
+  restates a design already considered and rejected earlier in this
+  project, without new evidence. AD-048 through AD-056 added, resolving
+  five other explicitly-approved items (Card multiplicity, account
+  deletion, Quiz/Flashcard study state, Sarah security invariants, domain
+  truth/deterministic authorization). AD-026 extended additively (again)
+  with `COURSE_SPACE_DISSOLVED`. Everything else in the external review
+  not covered by these nine ADs remains unadjudicated review input, not
+  architecture — per explicit instruction, no other open question was
+  reopened or resolved in this pass.
 
 ---
 

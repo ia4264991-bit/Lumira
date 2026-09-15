@@ -51,14 +51,19 @@ the next task, not something this document should pre-empt.
 3. Resolution of OQ-1 through OQ-5 — done, 2026-09-12, AD-029 through
    AD-039.
 4. Resolution of OQ-6 and OQ-7 — done, 2026-09-12, AD-040 through AD-043.
-5. Resolution of OQ-8 — **done, 2026-09-12, AD-044 through AD-047.** No
-   new open question surfaced this pass — all eight flagged questions from
-   this architecture round are now resolved.
-6. Next: derive the actual API contract and backend implementation plan
-   from the now-decided architecture. No further architectural gap is
-   currently blocking that — this is a good point to move from "resolve
-   open questions" to "design the contract/schema" if there's nothing else
-   to flag.
+5. Resolution of OQ-8 — done, 2026-09-12, AD-044 through AD-047.
+6. External red-team adjudication (ChatGPT + Gemini review, reconciled
+   against the live repo) — **done, 2026-09-12.** AD-019 reviewed and
+   reaffirmed unchanged (full reasoning in `docs/DECISIONS.md`'s Revisions
+   log). AD-048 through AD-056 added: Card multiplicity, account-deletion
+   lifecycle, Quiz/Flashcard canonical-artifact-vs-personal-study-state
+   boundary, two Sarah security invariants, and the foundational domain
+   -truth/deterministic-authorization principle.
+7. Next: derive the actual API contract and backend implementation plan
+   from the now-decided architecture. A consolidated `docs/DOMAIN_MODEL.md`
+   remains a real, worthwhile future document — this round deliberately
+   did not create it, since only these specific items were approved for
+   this pass and `docs/DECISIONS.md` alone is sufficient to encode them.
 
 ## Three-way collaboration structure
 
