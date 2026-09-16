@@ -142,19 +142,23 @@ MVP, do not silently pull forward:**
 
 ### B2 — Course Spaces
 - **Objective**: Course Space behavior as a Card capability, per AD-019 (no separate entity).
-- **Scope**: Sharing-enabled flag on Card; `card_membership` (AD-023: `id, cardId, userId, role, joinedAt`); membership status lifecycle (AD-032: `INVITED/ACTIVE/LEFT/REMOVED`); roles (Owner/Admin/Member, AD-023/034); ownership transfer (AD-042/043); leave/remove (AD-031/032); rejoin reuses existing Card (AD-033).
+- **Scope**: The `card` table's own `isShared` boolean (AD-019's persistence note — a plain column on the same `card` row, never a discriminator that changes the row's type; this is *not* the same mechanism as AD-045's artifact-level share records used later in B4 — Card-level "is this Card currently a Course Space" and artifact-level "is this specific artifact exposed into that Course Space" are two different axes, and must not be conflated); `card_membership` with **`status` and `role` as two separate columns** (`id, cardId, userId, status, role, joinedAt`) — `status` is AD-032's `INVITED/ACTIVE/LEFT/REMOVED` lifecycle, `role` is AD-023/034's `OWNER/ADMIN/MEMBER` — these must never be merged into one field; ownership transfer (AD-042/043); leave/remove (AD-031/032); rejoin reuses existing Card (AD-033).
 - **Dependencies**: B1.
-- **Deliverables**: Migration adding sharing/membership tables; membership lifecycle service; ownership-transfer operation (single atomic action per AD-043); join-link generation/reset (AD-024).
-- **Tests/validation**: Owner cannot leave without transfer (AD-042); no ownerless Course Space ever; rejoin does not fork a new Card (AD-033); Admin cannot promote/demote (AD-034).
-- **Exit criteria**: A Card can become a Course Space, accept members with roles, and support ownership transfer — all without a `CourseSpace` table existing anywhere (AD-019).
+- **Deliverables**: Migration adding `card.isShared` and the `card_membership` table (status + role as distinct columns); membership lifecycle service; ownership-transfer operation (single atomic action per AD-043); join-link generation/reset (AD-024).
+- **Tests/validation**: Owner cannot leave without transfer (AD-042); no ownerless Course Space ever; rejoin does not fork a new Card (AD-033); Admin cannot promote/demote (AD-034); toggling `isShared` never changes the row's type or creates a second table.
+- **Exit criteria**: A Card can become a Course Space, accept members with roles, and support ownership transfer — all on the same `card` row, with `status` and `role` independently queryable, and without a `CourseSpace` table existing anywhere (AD-019).
 
 ### B3 — Resources
 - **Objective**: Resource/ResourceVersion per the live architecture's Resource model.
 - **Scope**: Resource entity, ownership (Card or User, per the AD-021 pattern re-derived for the new model); storage integration (local disk — direct object storage is explicitly deferred, per §3); access control tied to Card/Course Space ownership.
-- **Dependencies**: B1, B2 (for Course-Space-scoped resources).
+- **Dependencies**: B1, B2 (for Course-Space-scoped resources). **Additionally gated on a Resource/File Processing specification that does not yet exist** — see the open note immediately below; B3 must not begin until that specification exists.
 - **Deliverables**: `Resource` entity + migration; upload endpoint (synchronous/local — async ingestion deferred); ownership enforcement.
 - **Tests/validation**: A private Resource is inaccessible to non-owners; a Course-Space Resource is accessible only to authorized members.
 - **Exit criteria**: A user can add a Resource to their own Card.
+
+> **Open specification gap — blocks B3 start.** No document in this repository currently defines: supported file types; MIME validation; maximum file sizes; extraction methods; OCR behavior; multimodal/visual processing; page and region-coordinate support; spreadsheet handling; unsupported-file behavior; or processing failure/retry behavior. This is not a domain-architecture decision (nothing here belongs in `DECISIONS.md`) — it's an engineering specification that must be written and reviewed before B3 implementation begins. Do not infer a file-format policy from this plan; write the actual specification first.
+
+
 
 ### B4 — Sharing + Authorization
 - **Objective**: The explicit share-record mechanism (AD-045) and the authorization boundary (AD-041/056).
