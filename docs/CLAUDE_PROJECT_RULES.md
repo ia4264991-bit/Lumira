@@ -1,12 +1,13 @@
 # Claude Project Rules — Lumira
 
-> ⚠️ **§0's document hierarchy is RETIRED — 2026-09-12.** It named the LPTS/
-> `DECISIONS.md`/`API_CONTRACT.md` as authoritative for a domain architecture
-> that has since been retired (see the retirement notices in those files
-> themselves). **A new hierarchy for the prototype-first architecture has
-> not been created yet** — this is deliberate; it's the next task, not part
-> of this cleanup. Rules 1–11 below are general engineering/process
-> discipline, not tied to the old domain model — they remain in force.
+> ⚠️ **§0's original document hierarchy was RETIRED — 2026-09-12**, and has
+> since been **replaced** (same day) by the live hierarchy in §0 below,
+> reflecting `docs/DECISIONS.md`, `docs/LUMIRA_STATE.md`,
+> `docs/DOMAIN_MODEL.md`, `docs/IMPLEMENTATION_PLAN.md`, and
+> `docs/IMPLEMENTATION_STATE.md` — all of which now exist. `API_CONTRACT.md`
+> remains historical/retired (see its own banner). Rules 1–11 below are
+> general engineering/process discipline, unaffected by either the old or
+> new domain model.
 
 Rules for any chat or agent (Architecture, Backend, or Android — including
 Antigravity, Claude Code, or Gemini in Android Studio) working on this
@@ -15,17 +16,38 @@ to sandbox instability and once had a live credential pasted into a chat
 transcript — these rules are direct responses to those specific incidents,
 not generic advice.
 
-## 0. Document hierarchy — RETIRED, pending replacement
+## 0. Document hierarchy (live, 2026-09-12 onward)
 
-The old hierarchy (LPTS chapters → `docs/DECISIONS.md` → `docs/LUMIRA_STATE.md`
-→ `API_CONTRACT.md` → this file) governed the retired academic-hierarchy
-architecture. Until a new hierarchy is defined: `docs/LUMIRA_STATE.md`'s
-"current repository state" section is the most reliable single source for
-what's actually true right now, since it was rewritten as part of this
-retirement to be accurate. Do not assume `docs/DECISIONS.md` or
-`API_CONTRACT.md` are authoritative for anything new — both now carry their
-own explicit retirement notices and are preserved for historical reference
-only.
+1. **`docs/DECISIONS.md`** — the frozen ADR/decision register (AD-001–018
+   retired/historical, clearly banner-marked; AD-019 onward is live and
+   authoritative). This is the single most authoritative document in the
+   repository for anything architectural.
+2. **`docs/DOMAIN_MODEL.md`** — a consolidated domain specification
+   *derived from* `DECISIONS.md`. If the two ever appear to disagree,
+   `DECISIONS.md` wins and `DOMAIN_MODEL.md` has a bug that needs fixing,
+   never the reverse.
+3. **`docs/LUMIRA_STATE.md`** — current implementation/project status.
+   Describes where the project *is*, never what it *should be*. No
+   authority over architecture.
+4. **`docs/IMPLEMENTATION_PLAN.md`** — the ordered build roadmap, derived
+   from the frozen architecture. Never a new architecture authority itself
+   — if a milestone needs a decision `DECISIONS.md` doesn't have, that's a
+   gap to report, not to invent here.
+5. **`docs/IMPLEMENTATION_STATE.md`** — machine/agent-readable progress
+   tracker. Architecture completion is not implementation completion;
+   this file tracks the latter only.
+6. **`API_CONTRACT.md`** — retired/historical (see its own banner). Not
+   authoritative for anything new; a fresh contract will be derived from
+   the now-decided architecture when backend implementation actually
+   begins.
+7. **`CLAUDE_PROJECT_RULES.md`** (this file) — governs *how* any agent
+   works with the six documents above. Never overrides their content.
+
+Focused specification documents for complex subsystems (e.g.
+`docs/RESOURCE_FILE_PROCESSING_SPEC.md`) may exist alongside these,
+consuming and citing the ADs that govern them — they document behavior
+already decided in `DECISIONS.md`, they don't create new architecture
+authority of their own.
 
 ## 1. GitHub `master` is the source of truth for implementation state
 
@@ -167,6 +189,17 @@ and the authoritative document is updated — never before.
   repository with Contents read/write — not an account-wide credential.
   Rule 8 remains the default going forward; this is a one-time, logged
   exception, not a change to the rule.
+
+- 2026-09-12 — **The same token has now been reused across multiple
+  separate sessions, not just once.** Flagged again at the point of reuse,
+  per standing practice, and the product owner directed reuse again. Noted
+  plainly rather than glossed over: calling each instance "one-time" has
+  stopped being accurate in practice — this is now a repeated pattern, not
+  a single acknowledged deviation. Rule 8's guidance (generate a fresh,
+  narrowly-scoped token per session) remains correct and unchanged; this
+  entry exists so the gap between the rule and actual practice is visible
+  in the record rather than quietly accumulating across entries that each
+  individually claim to be "one-time."
 
 - 2026-09-12 — **Clarification, not a change, to Rule 10.** "Under-build
   rather than over-build" governs *scope* (which capabilities to build),

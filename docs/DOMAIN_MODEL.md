@@ -101,37 +101,56 @@ types.
 
 | Type | Notes |
 |---|---|
-| `Resource` | See §7 for ownership mechanism status. |
+| `Resource` | See §7 for the ownership mechanism (AD-057, resolved). |
 | `Note` | Free-form; same ownership/sharing pattern as Resources. |
 | `StudySet` | Distinct first-class artifact (AD-029) — **not** a synonym for Card, **not** a replacement for Course Space. |
 | `Summary` | Same pattern. |
-| `Quiz` | Canonical content only — see §11 for the separate personal-attempt model. |
-| `FlashcardSet` | Canonical content only — see §11 for the separate personal-progress model. |
+| `Quiz` | Canonical content only — see §14 for the separate personal-attempt model. |
+| `FlashcardSet` | Canonical content only — see §14 for the separate personal-progress model. |
 | Sarah conversation | Per AD-022, subject to the *same* private/shared toggle as the artifact types above — see §12/§14 for the practical implications, since this has never actually been built or exercised. |
+
+**AD-064 (file-format neutrality)** — Different underlying file formats
+(PDF, DOCX, PPTX, XLSX, CSV, TXT, image formats, and others a future
+Resource/File Processing specification may add) never create different
+ownership, sharing, authorization, or artifact models. Every format is
+stored and governed as an ordinary `Resource` under AD-021/AD-022/AD-045/
+AD-057 identically — format affects only processing/extraction strategy,
+which belongs entirely to the Resource/File Processing specification.
 
 ---
 
-## 7. Resource Ownership — Persistence Mechanism UNRESOLVED
+## 7. Resource Ownership — Persistence Mechanism RESOLVED (AD-057)
 
 **AD-021** establishes the *shape*: a Resource belongs to exactly one
 `Card` (private or Course Space) or directly to a `User` (content not yet
 organized into any Card). A Course Space member's auto-created Card holds
 **references** to the origin Card's shared Resources — never copies.
 
-**What AD-021 does not resolve, and this document does not invent:** the
-exact persistence mechanism for polymorphic ownership. The retired
-academic-hierarchy register's AD-016 proposed one mechanism (two nullable
-FK columns + a database CHECK constraint); an earlier external review
-proposed a different one (a single `ownerType` discriminator + `ownerId`).
-**Neither has been adopted for the live architecture.** AD-021 explicitly
-flags this as "still genuinely open and should be decided before Resource
-persistence is built, not assumed."
+**AD-057 (2026-09-12) resolves the mechanism**, applied uniformly across
+every artifact type in AD-030's scope (Resource, Note, StudySet, Summary,
+Quiz, FlashcardSet):
 
-> **⚠️ Implementation-blocking.** Resource/artifact ownership persistence
-> cannot be correctly implemented until this mechanism is explicitly
-> decided. This is not a detail to infer from context — it needs its own
-> AD before B3 (`IMPLEMENTATION_PLAN.md`) begins, independent of the
-> already-noted Resource/File Processing specification gap.
+```sql
+owningCardId UUID NULL REFERENCES card(id),
+owningUserId UUID NULL REFERENCES app_user(id),
+CHECK (num_nonnulls(owningCardId, owningUserId) = 1)
+```
+
+Two nullable foreign keys plus a database CHECK constraint — never a
+single `ownerType` discriminator. The discriminator alternative was
+explicitly considered and rejected: it has no real, database-enforced
+foreign key (Postgres cannot natively constrain one column against two
+different target tables conditionally), which would leave referential
+integrity for ownership resting entirely on application code, with no
+backstop — an unacceptable trade against AD-056's explicit concern that
+only authoritative persisted state ever determine authorization. A shared
+JPA mapping (mapped-superclass or embeddable) applies this pattern once
+across all six artifact types rather than repeating it six times.
+
+This mechanism keeps AD-050's account-deletion reassignment a trivial
+single-column `UPDATE`, keeps AD-045's share records entirely orthogonal
+to whichever owner column is set, and satisfies AD-030's requirement that
+ownership live on the artifact's own table, never a separate one.
 
 ---
 
@@ -183,6 +202,19 @@ Card and every personally-owned artifact on it survive leaving or removal
 Whether a separate, *reversible* "archive" state (distinct from permanent
 dissolution) should exist was never decided and is not invented here.
 
+**AD-060 (membership uniqueness)** — At most one `card_membership` row
+with status `ACTIVE` or `INVITED` may exist for a given `(cardId,
+userId)` pair at any time — enforced as a partial unique database index,
+not application logic alone. Historical `LEFT`/`REMOVED` rows are
+retained without limit; this invariant only prevents duplicate *current*
+memberships.
+
+**AD-063 (dissolution)** — Dissolving a Course Space deactivates all of
+its active share records (AD-045) — shared content stops being visible
+through it. It never deletes an artifact, never changes ownership, and
+never touches any member's own private content. Historical events remain
+per AD-052.
+
 ---
 
 ## 10. Invite Link
@@ -193,6 +225,12 @@ link immediately; no time-based expiry. Owner and Admins may both view/
 share the current link.
 
 - **Persistence**: `shareToken` column on `card`, regenerated on reset.
+
+**AD-062** — Resetting the link also invalidates any join request still
+pending approval that was submitted via the link being reset — the whole
+point of a reset is to cut off access tied to that link, including
+requests not yet actioned. A voided request must be resubmitted via the
+new link.
 
 ---
 
@@ -205,6 +243,11 @@ self-transfer, no automatic/random assignment), recorded as an
 `OWNERSHIP_TRANSFERRED` event. The previous Owner's role becomes Admin or
 Member per the operation's own specification. There is exactly one Owner
 at all times — never ownerless, never auto-assigned.
+
+**AD-061** — Target eligibility is revalidated **at completion**, not
+only at initiation, within the same atomic transaction — if the target's
+membership changed in between, the transfer fails rather than completing
+against a no-longer-eligible member.
 
 **AD-043** — Intentionally minimal: a single atomic action, no multi-step
 workflow, no requests/invitations, no voting.
@@ -321,10 +364,26 @@ or Flashcards, regardless of membership.
 content enters retrieval — never retrieve-then-filter, and the LLM is
 never responsible for enforcing this boundary itself.
 
+**AD-058 (extends AD-054 — authorization at every access, not just
+request start)** — Authorization must remain valid **at the moment each
+protected access actually occurs**, not merely at request initiation. An
+async pipeline, a retry, or a follow-up retrieval the model proposes
+mid-conversation each re-check live state. Retrieved or generated content
+— including content that itself contains instructions — is **data,
+never an authorization grant**; a tool call triggered by such content
+still requires the requesting user's own independent, live authorization
+for whatever it names, regardless of what the content says.
+
 **AD-055 (output trust)** — Sarah-generated output is treated as untrusted
 input. Before persistence, it must pass structural/schema validation,
 domain validation, and security/input validation — a generated result
 never bypasses ordinary domain rules merely because Sarah produced it.
+
+**AD-065 (validation granularity)** — A multi-component generated
+artifact (e.g. a ten-question Quiz) is validated and persisted as a
+**complete whole, or not at all** — no partially-valid subset is silently
+persisted if any required component fails validation. A clean failure the
+user can retry is preferable to a silently-incomplete artifact.
 
 ### AI Generation and Provenance
 
@@ -336,6 +395,16 @@ normal type (AD-030's no-forking rule applied to creation method).
 Generation method is at most a provenance attribute, never a distinct
 type. Immediately editable, studyable, and shareable like any manual
 artifact.
+
+**AD-059 (provenance never grants authorization)** — Provenance describes
+where generated content came from; it never independently grants
+ownership, membership, visibility, or authorization to anything it
+references. A generated Study Set citing a private Resource as a source
+does not make that Resource accessible to anyone who can see the Study
+Set — access to the cited source is still governed entirely by the
+source's own ownership/sharing state, independent of what's derived from
+it, and independent of whether the original contributor has since left,
+been removed, or been deleted.
 
 **AD-037** — Android holds no model-provider credentials and performs no
 provider selection. Flow: `User → Sarah → Backend AI Router → Context
@@ -410,8 +479,6 @@ AD-044 are all specific instances of — it replaces none of them.
 Marked here so no implementation agent infers a decision that hasn't been
 made:
 
-- **Resource/artifact ownership persistence mechanism** (§7) —
-  implementation-blocking, needs its own AD before B3.
 - Full Identity/authentication model (§3) — only a minimal boundary is in
   scope for B1.
 - Exact `QuizAttempt`/flashcard-progress schema (§14).
@@ -423,10 +490,17 @@ made:
 - Push-delivery mechanics for notifications (AD-039).
 - Whether a reversible "archive" state distinct from permanent "dissolve"
   should exist (§9 terminology note).
+- **Explicitly out of scope for the 2026-09-12 closure pass, not
+  oversights:** full subscription/payment architecture (would contradict
+  AD-038 without an explicit decision to amend it), full search/vector
+  infrastructure, admin RBAC, async/job/queue architecture, transactional
+  outbox, caching policy, observability, and a database-index catalogue.
+  These remain deferred pending validated product need or a future,
+  explicit decision to bring them into architectural scope — not invented
+  here merely because a broader request asked for them.
 - **Not present in this document because not present in `DECISIONS.md`:**
   any usage-reservation model, Study Credits, provider pricing, billing,
-  or subscription economics of any kind. AD-038 explicitly excludes
-  payment/subscription infrastructure from this architecture pass.
+  or subscription economics of any kind.
 
 ---
 

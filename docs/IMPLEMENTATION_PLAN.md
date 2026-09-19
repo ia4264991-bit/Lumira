@@ -140,7 +140,7 @@ MVP, do not silently pull forward:**
 - **Tests/validation**: A user can own multiple Cards; Card ownership is enforced; no cross-user Card access.
 - **Exit criteria**: Multiple named Cards, per user, persisted and retrievable — matching the validated UX prototype's repeatable Create-Card flow.
 
-### B2 — Course Spaces
+### B2 — Course Spaces (Card capability, AD-019 — no separate entity)
 - **Objective**: Course Space behavior as a Card capability, per AD-019 (no separate entity).
 - **Scope**: The `card` table's own `isShared` boolean (AD-019's persistence note — a plain column on the same `card` row, never a discriminator that changes the row's type; this is *not* the same mechanism as AD-045's artifact-level share records used later in B4 — Card-level "is this Card currently a Course Space" and artifact-level "is this specific artifact exposed into that Course Space" are two different axes, and must not be conflated); `card_membership` with **`status` and `role` as two separate columns** (`id, cardId, userId, status, role, joinedAt`) — `status` is AD-032's `INVITED/ACTIVE/LEFT/REMOVED` lifecycle, `role` is AD-023/034's `OWNER/ADMIN/MEMBER` — these must never be merged into one field; ownership transfer (AD-042/043); leave/remove (AD-031/032); rejoin reuses existing Card (AD-033).
 - **Dependencies**: B1.
@@ -150,13 +150,13 @@ MVP, do not silently pull forward:**
 
 ### B3 — Resources
 - **Objective**: Resource/ResourceVersion per the live architecture's Resource model.
-- **Scope**: Resource entity, ownership (Card or User, per the AD-021 pattern re-derived for the new model); storage integration (local disk — direct object storage is explicitly deferred, per §3); access control tied to Card/Course Space ownership.
-- **Dependencies**: B1, B2 (for Course-Space-scoped resources). **Additionally gated on a Resource/File Processing specification that does not yet exist** — see the open note immediately below; B3 must not begin until that specification exists.
+- **Scope**: Resource entity, ownership (two nullable FKs + CHECK per AD-057, resolving AD-021's mechanism gap — `owningCardId`/`owningUserId`, uniform across all artifact types); storage integration (local disk — direct object storage is explicitly deferred, per §3); access control tied to Card/Course Space ownership.
+- **Dependencies**: B1, B2 (for Course-Space-scoped resources). **Additionally gated on `docs/RESOURCE_FILE_PROCESSING_SPEC.md`** — see below.
 - **Deliverables**: `Resource` entity + migration; upload endpoint (synchronous/local — async ingestion deferred); ownership enforcement.
-- **Tests/validation**: A private Resource is inaccessible to non-owners; a Course-Space Resource is accessible only to authorized members.
+- **Tests/validation**: A private Resource is inaccessible to non-owners; a Course-Space Resource is accessible only to authorized members; the CHECK constraint rejects both/neither owner column set.
 - **Exit criteria**: A user can add a Resource to their own Card.
 
-> **Open specification gap — blocks B3 start.** No document in this repository currently defines: supported file types; MIME validation; maximum file sizes; extraction methods; OCR behavior; multimodal/visual processing; page and region-coordinate support; spreadsheet handling; unsupported-file behavior; or processing failure/retry behavior. This is not a domain-architecture decision (nothing here belongs in `DECISIONS.md`) — it's an engineering specification that must be written and reviewed before B3 implementation begins. Do not infer a file-format policy from this plan; write the actual specification first.
+> **Resource/File Processing specification: see `docs/RESOURCE_FILE_PROCESSING_SPEC.md`.** B3 depends on it directly.
 
 
 
@@ -258,7 +258,7 @@ a backend API; none of them re-implement backend logic.
 - **Tests/validation**: Creating multiple Cards works, matching AD-048 exactly.
 - **Exit criteria**: Functionally equivalent to the validated UX prototype's Cards/Course Spaces tabs, against a real backend.
 
-### A3 — Course Spaces
+### A3 — Course Spaces (Card capability, AD-019 — no separate entity)
 - **Objective**: Create/share/join/manage Course Spaces from Android.
 - **Scope**: Create-Course-Space flow; share-link generation/reset UI; join flow (including the approval-required case); member list with role badges; ownership-transfer UI (minimal, single-action per AD-043); leave/remove UI.
 - **Dependencies**: B2, A2.
@@ -353,7 +353,7 @@ boundary as any other client.
 - **Dependencies**: ADM-1, B4.
 - **Exit criteria**: A force-unshare from the admin app produces the same `CONTENT_FORCE_UNSHARED` event as any other force-unshare.
 
-### ADM-4 — Course Space Administration
+### ADM-4 — Course Space Administration (Card capability, AD-019 — no separate entity)
 - **Objective**: Membership/administration visibility for support purposes.
 - **Scope**: Membership inspection; administrative moderation actions bounded to what AD-034/042 already permit — no new admin-exclusive power invented here.
 - **Dependencies**: ADM-1, B2.

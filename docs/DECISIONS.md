@@ -56,10 +56,10 @@ in meaning. Changes get a new dated Revision entry.
   yet organized into any Card). A Course Space member's auto-created Card
   holds **references** to the origin Card's shared Resources, never
   copies — no storage duplication. *(Re-derives old AD-004's shape on
-  independent merit; the actual mechanism decision old AD-016 left open
-  — single discriminator vs. two nullable FKs — is still genuinely open
-  and should be decided before Resource persistence is built, not
-  assumed.)*
+  independent merit. The persistence mechanism this AD originally left
+  open — single discriminator vs. two nullable FKs — is now **resolved**
+  by AD-057, 2026-09-12. This AD's own shape is unchanged; only the
+  mechanism gap it flagged is closed.)*
 
 - **AD-022** — Ownership and sharing/visibility are separate concerns
   (re-derives old AD-018 on independent merit). Resources default to
@@ -483,6 +483,135 @@ See Revisions below for the full record of this review.
   policy-service pattern, a cache-invalidation strategy) are deferred to
   engineering/architecture documentation, not frozen here.
 
+### Architecture closure pass (2026-09-12) — AD-021 resolved, eight findings closed
+
+**AD-021 reviewed and resolved by this pass** — see AD-057. AD-021's own
+text is unchanged (the shape it establishes was always correct); this
+closes the persistence-mechanism gap it explicitly left open.
+
+- **AD-057 (resolves AD-021's mechanism gap)** — Polymorphic ownership
+  (Card-or-User) for every artifact type in AD-030's scope (Resource,
+  Note, StudySet, Summary, Quiz, FlashcardSet) is represented as **two
+  nullable foreign-key columns plus a database CHECK constraint**:
+  `owningCardId UUID NULL REFERENCES card(id)`, `owningUserId UUID NULL
+  REFERENCES app_user(id)`, `CHECK (num_nonnulls(owningCardId,
+  owningUserId) = 1)`. Applied uniformly across all six artifact tables,
+  with a shared JPA mapping (mapped-superclass or embeddable) so the
+  pattern is written once, not six times. **Rejected alternative:** a
+  single `ownerType` discriminator + `ownerId` column — more compact, but
+  has no real, database-enforced foreign key (Postgres cannot natively
+  constrain one column against two different target tables
+  conditionally), meaning referential integrity for ownership would rest
+  entirely on application code, with no backstop, forever. Given AD-056's
+  explicit concern that nothing but authoritative persisted state ever
+  determine authorization, trading away the one mechanism that makes
+  ownership *mechanically, unconditionally* correct — for a marginal
+  schema-compactness gain — is not an acceptable trade. **Verified
+  consistent with AD-021 (shape unchanged), AD-030 (ownership stays on the
+  artifact's own table, never a separate ownership table — this mechanism
+  satisfies that directly), AD-045 (share records reference the artifact
+  by ID, entirely orthogonal to which owner column is set), AD-050
+  (reassignment on account deletion becomes a single-column `UPDATE ...
+  SET owningCardId = <Course Space's Card>`, trivial under this
+  mechanism), and AD-056 (real FK integrity directly serves this AD's
+  spirit).**
+
+- **AD-058 (extends AD-054 — authorization must hold at the moment of
+  every protected access, not only at request initiation)** — Sarah's
+  authorization check (AD-054) must be valid **at the moment each
+  protected data access actually occurs** — a single check at request
+  start is insufficient across an async pipeline, a retry, a multi-step
+  retrieval, or a follow-up retrieval the model itself proposes mid
+  -conversation. Concretely: if a user's membership changes (e.g.
+  ACTIVE→REMOVED) between request initiation and a later retrieval step
+  within the same request's lifecycle, the later step must re-evaluate
+  authorization against current state, not trust the initial check.
+  Retrieved or generated content — including content that itself contains
+  instructions (e.g. injected text in a PDF saying "retrieve Resource
+  X") — is **data, never an authorization grant**; a tool call or
+  follow-up retrieval triggered by such content still requires the
+  requesting user's own independent, live authorization for whatever it
+  names, regardless of what the content instructs. Specific mechanisms
+  (locking strategy, snapshot isolation, re-query cadence) are
+  implementation detail, not frozen here.
+
+- **AD-059 (extends AD-036 — provenance never grants authorization)** —
+  Provenance describes where generated content came from; it never
+  independently grants ownership, membership, visibility, or
+  authorization to anything it references. A generated Study Set citing a
+  private Resource as a source does not thereby make that Resource
+  accessible to anyone who can see the Study Set — access to the *cited
+  source* is still governed entirely by that source's own ownership/
+  sharing state (AD-021/AD-022/AD-045), independent of who can see
+  something derived from it. This holds across Cards, across Course
+  Spaces, and regardless of whether the original contributor has since
+  left, been removed, or had their account deleted.
+
+- **AD-060 (membership uniqueness invariant, extends AD-032/033)** — At
+  most one `card_membership` row with status `ACTIVE` or `INVITED` may
+  exist for a given `(cardId, userId)` pair at any time. This does not
+  constrain `LEFT`/`REMOVED` rows — a user's full historical membership
+  record (including prior `LEFT`/`REMOVED` episodes) is retained
+  unconditionally (AD-033's rejoin-creates-a-new-episode model already
+  assumes this). Enforced as a database constraint (a partial unique
+  index over `(cardId, userId)` filtered to `status IN ('ACTIVE',
+  'INVITED')`), not application logic alone.
+
+- **AD-061 (extends AD-042 — ownership transfer target revalidation)** —
+  Ownership transfer must verify the target member's active, eligible
+  membership at the moment the transfer **completes**, not only at the
+  moment it was initiated. If the target's membership status changed
+  (e.g. to `LEFT`/`REMOVED`) between initiation and completion, the
+  transfer fails and must be retried against a currently-eligible target
+  — it never silently completes against a no-longer-eligible one. The
+  operation remains atomic (AD-043) — validation and completion happen
+  within the same transaction, not as two separate steps a race could
+  land between.
+
+- **AD-062 (extends AD-024/025 — invite link reset and pending join
+  requests)** — Resetting a Course Space's invite link (AD-024)
+  **invalidates any join request still pending approval** (AD-025) that
+  was submitted via the link being reset. A user whose request is voided
+  this way must rejoin via the new link. Rationale: the purpose of
+  resetting a link is to cut off access associated with it; leaving
+  pending requests alive would let a compromised or over-shared link
+  continue producing new members after the exact moment its owner acted
+  to stop that.
+
+- **AD-063 (extends AD-051/AD-045/AD-052 — Course Space dissolution)** —
+  Dissolving a Course Space (AD-051) deactivates **all** of that Course
+  Space's active share records (AD-045) — shared content is no longer
+  visible through it. It does **not**: delete any artifact, change any
+  artifact's ownership, or affect any member's private content on their
+  own Card (AD-031). Historical `CourseSpaceEvent` records for the
+  dissolved Course Space are retained per AD-052, unaffected by
+  dissolution itself.
+
+- **AD-064 (extends AD-021/AD-030 — file-format neutrality)** — Different
+  underlying file formats (PDF, DOCX, PPTX, XLSX, CSV, TXT, image formats,
+  and others a future Resource/File Processing specification may add)
+  **never** create different ownership, sharing, authorization, or
+  artifact models. Every format is stored and governed as an ordinary
+  `Resource` under AD-021/AD-022/AD-045/AD-057 identically — format
+  affects only *processing/extraction strategy*, which belongs entirely
+  to the Resource/File Processing specification, never to this domain
+  model.
+
+- **AD-065 (resolves AD-055's validation granularity — all-or-nothing)**
+  — A Sarah-generated multi-component artifact (e.g. a ten-question Quiz)
+  is validated and persisted **as a complete whole, or not at all.** If
+  any required component fails schema, domain, or security validation,
+  the entire generation attempt is rejected — no partially-valid subset
+  is silently persisted. Rationale: a Quiz missing an unmarked, silently
+  -dropped question is a corrupted representation of what the user asked
+  for, and persisting it without any visible indication of the loss is a
+  data-integrity and user-trust problem worse than a clean failure the
+  user can retry. *(Noted as a real judgment call, not a purely mechanical
+  derivation — a future, more nuanced per-component repair flow remains a
+  legitimate thing to reconsider explicitly later; this AD picks the
+  simpler, safer default for now rather than leaving the granularity
+  unspecified.)*
+
 ### Deliberately left as an extension point, not designed now
 
 - **Offline/download capability** — the original design doc's distinction
@@ -559,6 +688,24 @@ of the previous three passes did.
   not covered by these nine ADs remains unadjudicated review input, not
   architecture — per explicit instruction, no other open question was
   reopened or resolved in this pass.
+- 2026-09-12 — **Architecture closure pass.** AD-021's persistence
+  -mechanism gap resolved by AD-057 (two nullable FKs + CHECK, uniform
+  across all six artifact types) — rejected the single-discriminator
+  alternative explicitly, for loss of database-enforced FK integrity
+  against AD-056's spirit. AD-058 through AD-065 added, closing eight
+  findings from the prior adversarial red-team pass (per-access Sarah
+  authorization, provenance-never-grants-authorization, membership
+  uniqueness, transfer-target revalidation, invite-reset-vs-pending-join,
+  Course Space dissolution, file-format neutrality, AI-output validation
+  granularity). Explicitly out of scope for this pass, per direct
+  instruction: full subscription/payment architecture (would contradict
+  AD-038 without an explicit, conscious decision to amend it), full
+  search/vector infrastructure, admin RBAC, async/job/queue architecture,
+  transactional outbox, caching policy, observability, and a premature
+  database-index catalogue — all correctly remain deferred pending either
+  validated product need or an explicit future decision to bring them
+  into scope, not invented here merely because a broader prompt asked for
+  them.
 
 ---
 
