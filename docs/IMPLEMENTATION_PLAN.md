@@ -16,14 +16,16 @@ lets a fresh session resume without chat history.
 ### Source-of-truth hierarchy (unchanged, restated for this document's scope)
 
 `docs/DECISIONS.md` (frozen ADs) → `docs/LUMIRA_STATE.md` (current status) →
-`API_CONTRACT.md` (network boundary, currently retired/historical — see
-its own banner) → `docs/CLAUDE_PROJECT_RULES.md` (process rules) → this
-file (execution order only).
+`API_CONTRACT.md` (network boundary — being rebuilt as authoritative
+alongside this cleanup; see its own banner for current status) →
+`docs/CLAUDE_PROJECT_RULES.md` (process rules) → this file (execution
+order only).
 
 **This plan does not decide architecture.** Every milestone below is
-scoped to what AD-001–AD-056 already permit. If a milestone turns out to
-need a decision that isn't in `DECISIONS.md`, that is not this document's
-job to invent.
+scoped to what AD-001–AD-065 already permit (AD-001–018 retired/
+historical; AD-019 onward live — see `docs/DECISIONS.md`'s own banners).
+If a milestone turns out to need a decision that isn't in `DECISIONS.md`,
+that is not this document's job to invent.
 
 ### Critical implementation rule
 
@@ -149,12 +151,30 @@ MVP, do not silently pull forward:**
 - **Exit criteria**: A Card can become a Course Space, accept members with roles, and support ownership transfer — all on the same `card` row, with `status` and `role` independently queryable, and without a `CourseSpace` table existing anywhere (AD-019).
 
 ### B3 — Resources
-- **Objective**: Resource/ResourceVersion per the live architecture's Resource model.
-- **Scope**: Resource entity, ownership (two nullable FKs + CHECK per AD-057, resolving AD-021's mechanism gap — `owningCardId`/`owningUserId`, uniform across all artifact types); storage integration (local disk — direct object storage is explicitly deferred, per §3); access control tied to Card/Course Space ownership.
+- **Objective**: The `Resource` entity and its processing lifecycle, per AD-021/AD-057 and `docs/RESOURCE_FILE_PROCESSING_SPEC.md`. *(Not a generalized versioning system — no `ResourceVersion`/`ContentVersion` entity is implied or required; see the note below.)*
+- **Scope**: Resource entity, ownership (two nullable FKs + CHECK per AD-057, resolving AD-021's mechanism gap — `owningCardId`/`owningUserId`, uniform across all artifact types); the persisted processing-lifecycle state (`UPLOADED/PROCESSING/READY/FAILED`, per the File Processing spec) as real columns on the `Resource` row itself, not a separate versioned-history table; access control tied to Card/Course Space ownership.
 - **Dependencies**: B1, B2 (for Course-Space-scoped resources). **Additionally gated on `docs/RESOURCE_FILE_PROCESSING_SPEC.md`** — see below.
-- **Deliverables**: `Resource` entity + migration; upload endpoint (synchronous/local — async ingestion deferred); ownership enforcement.
-- **Tests/validation**: A private Resource is inaccessible to non-owners; a Course-Space Resource is accessible only to authorized members; the CHECK constraint rejects both/neither owner column set.
+- **Deliverables**: `Resource` entity + migration (including the lifecycle-status column); upload endpoint that runs extraction **synchronously, in-process, for MVP** — no queue, no worker, no outbox; ownership enforcement.
+- **Tests/validation**: A private Resource is inaccessible to non-owners; a Course-Space Resource is accessible only to authorized members; the CHECK constraint rejects both/neither owner column set; the lifecycle status column correctly reflects `READY`/`FAILED` after synchronous processing completes.
 - **Exit criteria**: A user can add a Resource to their own Card.
+
+> **Synchronous MVP execution vs. the persisted lifecycle — not a
+> contradiction.** MVP performs resource processing synchronously and
+> in-process, with no queue/worker/outbox infrastructure (all explicitly
+> deferred). The `UPLOADED/PROCESSING/READY/FAILED` states from
+> `docs/RESOURCE_FILE_PROCESSING_SPEC.md` are still **persisted as real
+> data** on the Resource row regardless — the state machine is modeled
+> explicitly now specifically so that a future asynchronous
+> implementation can be introduced later **without changing the domain
+> contract**: the same states, the same column, the same meaning, just a
+> different execution mechanism behind them.
+
+> **No `ResourceVersion`/`ContentVersion` entity.** Generalized content
+> versioning was explicitly deferred (`docs/DECISIONS.md`,
+> `docs/DOMAIN_MODEL.md` §18). A `Resource` row has one current set of
+> extracted content, replaced in place on reprocessing — it does not
+> retain multiple historical versions. Do not build a versioned-history
+> table for this milestone.
 
 > **Resource/File Processing specification: see `docs/RESOURCE_FILE_PROCESSING_SPEC.md`.** B3 depends on it directly.
 
@@ -439,13 +459,14 @@ I1 (ongoing, paired) → I2 (needs everything) → I3 → I4 → I5
 | AD(s) | Enforced primarily in |
 |---|---|
 | AD-019, 048 | B1, B2 |
-| AD-021, 025, 030, 031, 033 | B1–B5 |
-| AD-023, 032, 034, 042, 043 | B2 |
+| AD-021, 025, 030, 031, 033, 057, 060, 064 | B1–B5 |
+| AD-023, 032, 034, 042, 043, 061 | B2 |
+| AD-024, 062 | B2 |
 | AD-040, 041, 044, 045, 046, 047, 056 | B4, B11, I3 |
-| AD-026 (+ additive event types) | B8 |
-| AD-027, 028, 037, 038, 054 | B9 |
-| AD-035, 036, 055 | B10 |
-| AD-049–052 | B11, ADM-2, I2 |
+| AD-026 (+ additive event types), 063 | B8 |
+| AD-027, 028, 037, 038, 054, 058 | B9 |
+| AD-035, 036, 055, 059, 065 | B10 |
+| AD-049–052, 063 | B11, ADM-2, I2 |
 | AD-053 | B6, B7 |
 
 Full text of every AD remains in `docs/DECISIONS.md` — this table is a

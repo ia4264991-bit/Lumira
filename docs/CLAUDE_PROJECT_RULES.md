@@ -4,10 +4,10 @@
 > since been **replaced** (same day) by the live hierarchy in §0 below,
 > reflecting `docs/DECISIONS.md`, `docs/LUMIRA_STATE.md`,
 > `docs/DOMAIN_MODEL.md`, `docs/IMPLEMENTATION_PLAN.md`, and
-> `docs/IMPLEMENTATION_STATE.md` — all of which now exist. `API_CONTRACT.md`
-> remains historical/retired (see its own banner). Rules 1–11 below are
-> general engineering/process discipline, unaffected by either the old or
-> new domain model.
+> `docs/IMPLEMENTATION_STATE.md`. `API_CONTRACT.md` was rebuilt as
+> authoritative the same day the architecture closure pass completed —
+> see its own banner. Rules 1–11 below are general engineering/process
+> discipline, unaffected by either the old or new domain model.
 
 Rules for any chat or agent (Architecture, Backend, or Android — including
 Antigravity, Claude Code, or Gemini in Android Studio) working on this
@@ -36,10 +36,10 @@ not generic advice.
 5. **`docs/IMPLEMENTATION_STATE.md`** — machine/agent-readable progress
    tracker. Architecture completion is not implementation completion;
    this file tracks the latter only.
-6. **`API_CONTRACT.md`** — retired/historical (see its own banner). Not
-   authoritative for anything new; a fresh contract will be derived from
-   the now-decided architecture when backend implementation actually
-   begins.
+6. **`API_CONTRACT.md`** — the authoritative network boundary, rebuilt
+   from AD-019–065 and the governing specification documents. Governs
+   REST shapes/authorization requirements at the API surface; does not
+   govern domain architecture beyond what it derives from `DECISIONS.md`.
 7. **`CLAUDE_PROJECT_RULES.md`** (this file) — governs *how* any agent
    works with the six documents above. Never overrides their content.
 
