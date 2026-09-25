@@ -8,16 +8,16 @@ correct without checking.
 ---
 
 ```
-CURRENT_PHASE: Not started (architecture and planning complete, zero implementation milestones begun)
-CURRENT_MILESTONE: None
-STATUS: BLOCKED_ON_NOTHING — ready to begin B0
-LAST_COMPLETED_MILESTONE: None
+CURRENT_PHASE: Backend Implementation
+CURRENT_MILESTONE: B1 — Identity + Personal Cards
+STATUS: BLOCKED_ON_NOTHING — B0 completed, ready to begin B1
+LAST_COMPLETED_MILESTONE: B0 — Infrastructure / Foundation
 IN_PROGRESS: None
-NEXT_MILESTONE: B0 — Infrastructure/Foundation
+NEXT_MILESTONE: B1 — Identity + Personal Cards
 BLOCKERS: None currently known
-LAST_VALIDATED_COMMIT: b6e2ec4 (architecture), <this commit> (planning docs)
-LAST_VALIDATION: Repository inspected directly 2026-09-12 — confirmed zero domain entities exist beyond Step 1-2 infrastructure; confirmed frontend is real/working but predates the Card/Course Space pivot; confirmed API_CONTRACT.md is retired/historical only.
-NOTES: Architecture (AD-001 through AD-056) is fully frozen and consistent as of commit b6e2ec4. This does NOT mean any implementation exists. Do not mark a milestone complete because its corresponding architecture decisions exist — architecture completion and implementation completion are different facts. Verify against actual code before updating this file.
+LAST_VALIDATED_COMMIT: <this commit>
+LAST_VALIDATION: 2026-09-22 — B0 implemented, compiled, and verified. 19 automated tests executed and passing against real PostgreSQL 18.3. Verified error response envelope, global exception handling, AD-057 polymorphic ownership foundation (ArtifactOwner, BaseEntity), security scaffolding (@CurrentUser, CurrentUserArgumentResolver, SecurityInterceptor, TokenResolver), and database integration test infrastructure. Zero B1+ domain entities created.
+NOTES: Milestone B0 is genuinely complete with automated tests verified against live PostgreSQL. Ready to begin Milestone B1 (Identity + Personal Cards).
 ```
 
 ---
@@ -47,7 +47,7 @@ it exists."**
 
 ### Backend
 
-- [ ] B0 — Infrastructure/Foundation
+- [x] B0 — Infrastructure/Foundation
 - [ ] B1 — Identity + Personal Cards
 - [ ] B2 — Course Spaces
 - [ ] B3 — Resources
@@ -106,18 +106,9 @@ track starts from nothing.
 
 ---
 
-## Verified-actual repository state (as of this file's creation)
+## Verified-actual repository state (as of B0 completion)
 
-Recorded here so a fresh session doesn't have to re-derive it from scratch,
-but should still spot-check it rather than trust it blindly:
-
-- Backend: Spring Boot skeleton, PostgreSQL/JPA/Flyway/Docker Compose,
-  one migration (`V1__enable_pgcrypto_extension.sql`), one endpoint
-  (`GET /v1/health`). Eleven package directories, all empty except a
-  retired-scope `package-info.java`. Zero domain entities.
-- Frontend: real, working Kotlin/Compose app — PDF reader, Selection
-  Engine (complete), Room persistence, auth screens, chat UI. Predates the
-  Card/Course Space pivot. `DebugAuthBypass` still in place (correctly —
-  no real backend auth exists yet to replace it with).
+- Backend: Spring Boot 3.3.4, PostgreSQL/JPA/Flyway, baseline migration (`V1__enable_pgcrypto_extension.sql`), `/v1/health` endpoint. Error handling envelope (`ApiErrorResponse`, `GlobalExceptionHandler`, `LumiraException`), AD-057 polymorphic ownership mapping (`ArtifactOwner`, `BaseEntity`), security scaffolding (`@CurrentUser`, `SecurityInterceptor`, `TokenResolver`), and real PostgreSQL integration test infrastructure (`BaseIntegrationTest`, `DatabaseIntegrationTest`). All 19 tests passing.
+- Frontend: real, working Kotlin/Compose app — PDF reader, Selection Engine (complete), Room persistence, auth screens, chat UI. Predates the Card/Course Space pivot. `DebugAuthBypass` still in place (correctly — awaiting B1).
 - Admin web: does not exist.
-- `API_CONTRACT.md`: retired, historical DTOs only, not a build target.
+- `API_CONTRACT.md`: Live, authoritative.

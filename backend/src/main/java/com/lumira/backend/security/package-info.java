@@ -1,14 +1,13 @@
 /**
- * Retired old-architecture scope — 2026-09-12.
+ * Foundational security scaffolding and caller identity boundary.
  *
- * <p>This package previously held documentation-only scope for the retired
- * academic-hierarchy architecture. No implementation was ever built here —
- * this file was pure Javadoc, no classes. It has been rewritten to remove
- * that stale scope description rather than leave it pointing an agent
- * toward a retired plan.
- *
- * <p>See {@code docs/LUMIRA_STATE.md} in the repository root for current
- * status. The new prototype-first architecture may reuse this package name,
- * repurpose it, or leave it unused — that decision has not been made yet.
+ * <p>Provides:
+ * <ul>
+ *   <li>{@link com.lumira.backend.security.AuthenticatedUser}: Representation of authenticated user principal (UUID userId).</li>
+ *   <li>{@link com.lumira.backend.security.SecurityContext}: ThreadLocal holder for request-scoped user context.</li>
+ *   <li>{@link com.lumira.backend.security.CurrentUser}: Controller parameter annotation for injecting the authenticated user or userId.</li>
+ *   <li>{@link com.lumira.backend.security.RequireAuth}: Enforces authentication at the controller/method level.</li>
+ *   <li>{@link com.lumira.backend.security.TokenResolver}: Abstraction for resolving tokens, enabling B1 identity implementation without boundary changes.</li>
+ * </ul>
  */
 package com.lumira.backend.security;

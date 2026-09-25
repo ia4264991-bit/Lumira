@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: lumira-backend-test
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:lumira_test}?sslmode=disable
+    username: ${DB_USER:lumira_dev}
+    password: ${DB_PASSWORD:change_me_locally}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+server:
+  port: 0

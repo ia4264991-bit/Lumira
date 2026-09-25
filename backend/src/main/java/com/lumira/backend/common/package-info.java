@@ -1,12 +1,11 @@
 /**
- * Truly cross-cutting concerns only: health/status reporting, base
- * exception types, the global exception handler, and shared response
- * envelopes used by more than one module.
+ * Cross-cutting backend foundations: health reporting, error responses,
+ * standard exception hierarchy, and base entity definitions.
  *
- * <p>Does NOT hold business logic, module-specific utilities, or generic
- * "helper" classes that really belong to a single module. If a class is
- * only ever used by one module, it belongs in that module's own package,
- * not here — this package is deliberately kept small to avoid becoming a
- * "God package" as the codebase grows.
+ * <p>Contains:
+ * <ul>
+ *   <li>{@code common.error}: API error envelope, ErrorCode enum, LumiraException hierarchy, and GlobalExceptionHandler.</li>
+ *   <li>{@code common.domain}: BaseEntity mapped superclass and ArtifactOwner polymorphic ownership embeddable (AD-057).</li>
+ * </ul>
  */
 package com.lumira.backend.common;
