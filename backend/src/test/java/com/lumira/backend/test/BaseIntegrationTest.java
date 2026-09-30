@@ -1,9 +1,11 @@
 package com.lumira.backend.test;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -27,6 +29,11 @@ public abstract class BaseIntegrationTest {
 
     @Autowired
     protected JdbcTemplate jdbcTemplate;
+
+    @PostConstruct
+    void initRestTemplate() {
+        restTemplate.getRestTemplate().setRequestFactory(new JdkClientHttpRequestFactory());
+    }
 
     /**
      * Helper to construct full URL for an endpoint path.
