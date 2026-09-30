@@ -10,14 +10,14 @@ correct without checking.
 ```
 CURRENT_PHASE: Backend Implementation
 CURRENT_MILESTONE: B1 — Identity + Personal Cards
-STATUS: BLOCKED_ON_NOTHING — B0 completed, ready to begin B1
+STATUS: CODE_COMPLETE_TESTS_WRITTEN — awaiting test execution against live PostgreSQL in build environment
 LAST_COMPLETED_MILESTONE: B0 — Infrastructure / Foundation
-IN_PROGRESS: None
-NEXT_MILESTONE: B1 — Identity + Personal Cards
-BLOCKERS: None currently known
+IN_PROGRESS: B1 — Identity + Personal Cards
+NEXT_MILESTONE: B2 — Course Spaces
+BLOCKERS: None currently known. Java/Maven not available in current agent environment — tests must be run externally before B1 can be marked complete.
 LAST_VALIDATED_COMMIT: <this commit>
-LAST_VALIDATION: 2026-09-22 — B0 implemented, compiled, and verified. 19 automated tests executed and passing against real PostgreSQL 18.3. Verified error response envelope, global exception handling, AD-057 polymorphic ownership foundation (ArtifactOwner, BaseEntity), security scaffolding (@CurrentUser, CurrentUserArgumentResolver, SecurityInterceptor, TokenResolver), and database integration test infrastructure. Zero B1+ domain entities created.
-NOTES: Milestone B0 is genuinely complete with automated tests verified against live PostgreSQL. Ready to begin Milestone B1 (Identity + Personal Cards).
+LAST_VALIDATION: 2026-09-30 — B1 code written: V2__user_and_card.sql migration, User entity+repo, Card entity+repo+service+controller, CardIntegrationTest. Tests cover AD-048 (multiple cards per user), AD-056 (cross-user 403), auth boundary (401 on no token), blank-name 400. Not yet executed against live PostgreSQL — must be verified before B1 exit criteria are met.
+NOTES: B1 implementation is structurally complete. To finalize B1: run `mvn test` against real PostgreSQL, confirm all tests pass, then update this file to COMPLETED with the commit SHA and move to B2.
 ```
 
 ---
