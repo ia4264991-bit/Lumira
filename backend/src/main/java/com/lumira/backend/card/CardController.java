@@ -3,6 +3,7 @@ package com.lumira.backend.card;
 import com.lumira.backend.security.AuthenticatedUser;
 import com.lumira.backend.security.CurrentUser;
 import com.lumira.backend.security.RequireAuth;
+import com.lumira.backend.common.error.ValidationException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,13 +12,14 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
 
 /**
- * REST controller for Card endpoints (B1 scope).
+ * REST controller for personal and shared Card endpoints (B1/B2 scope).
  *
  * <p>AD-019 API boundary:
  * <ul>
@@ -27,7 +29,7 @@ import java.util.UUID;
  * </ul>
  *
  * <p>All endpoints require authentication ({@link RequireAuth}).
- * Responses are owner-scoped — no cross-user data is ever returned.
+ * Reads revalidate ownership or active membership from persisted state.
  */
 @RestController
 @RequestMapping("/v1/cards")
@@ -35,9 +37,11 @@ import java.util.UUID;
 public class CardController {
 
     private final CardService cardService;
+    private final CourseSpaceService courseSpaceService;
 
-    public CardController(CardService cardService) {
+    public CardController(CardService cardService, CourseSpaceService courseSpaceService) {
         this.cardService = cardService;
+        this.courseSpaceService = courseSpaceService;
     }
 
     /**
@@ -57,21 +61,24 @@ public class CardController {
      * List the authenticated user's Cards, newest first.
      */
     @GetMapping
-    public List<CardResponse> listMyCards(@CurrentUser AuthenticatedUser currentUser) {
-        return cardService.listMyCards(currentUser.userId())
-                .stream()
-                .map(CardResponse::from)
-                .toList();
+    public List<?> listMyCards(@RequestParam(required = false) String scope,
+                               @CurrentUser AuthenticatedUser currentUser) {
+        if (scope == null) {
+            return cardService.listMyCards(currentUser.userId()).stream().map(CardResponse::from).toList();
+        }
+        if ("shared".equals(scope)) return courseSpaceService.listSharedCards(currentUser.userId());
+        throw new ValidationException("scope must be 'shared' when provided");
     }
 
     /**
-     * Fetch a single Card by id — only if owned by the authenticated user.
+     * Fetch a Card by id when owned or currently shared with the authenticated user;
+     * absent and unauthorized Cards share the API's 404 response.
      */
     @GetMapping("/{id}")
     public CardResponse getMyCard(
             @PathVariable UUID id,
             @CurrentUser AuthenticatedUser currentUser
     ) {
-        return CardResponse.from(cardService.getMyCard(id, currentUser.userId()));
+        return CardResponse.from(courseSpaceService.getAccessibleCard(id, currentUser.userId()));
     }
 }

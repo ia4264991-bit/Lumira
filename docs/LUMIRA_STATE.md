@@ -19,52 +19,27 @@ architecture, not assumed to carry over unchanged from the old hierarchy.
 
 ## What Lumira is (current, accurate)
 
-A study platform being rebuilt around a validated UX prototype: **Card**
-(private study workspace: Resources, Notes, AI/Sarah, Summaries, Quizzes,
-Flashcards) with **Course Space** as its sharing/collaboration layer (same
-underlying Card, membership + sharing enabled — not a separate entity).
-Sarah is a first-class, embedded workspace capability, not a bolt-on
-chatbot. Target market includes African high schools — mobile-first,
-offline/low-bandwidth-friendly, and cost-sensitive infrastructure
-considerations apply.
+A study platform built around Card as its sole workspace entity, with
+Course Space as the sharing/collaboration capability on a Card and Sarah as
+a first-class workspace capability. The current architecture is recorded
+in `docs/DECISIONS.md` (AD-019 through AD-070), consolidated in
+`docs/DOMAIN_MODEL.md`, and reflected in `API_CONTRACT.md`.
 
-**A formal architecture for this has not been written yet.** The UX
-prototype (an HTML/CSS/JS click-through, not committed to this repository)
-is the product/UX reference point. Building the architecture around it is
-the next task, not something this document should pre-empt.
-
-## Current repository state (accurate as of 2026-09-12)
+## Current repository state (verified 2026-10-03)
 
 | Area | Status |
 |---|---|
-| Backend | Spring Boot skeleton + Postgres/JPA/Flyway/Docker Compose infrastructure only. No domain entities of any kind exist. The old Step 3–7 roadmap is retired — see `backend/README.md`. |
-| Frontend | Real, working PDF-reader/auth/chat thin client (Selection Engine, Room persistence, auth screens, chat UI) — predates the Card/Course Space pivot, not yet rebuilt around it. See `frontend/README.md`. |
-| API contract | Retired — see `API_CONTRACT.md`. Old DTO shapes preserved there for historical reference only. |
-| Architecture decisions | Retired — see `docs/DECISIONS.md`. |
-| UX prototype | Exists as a standalone HTML/CSS/JS artifact (Card creation, resource add with processing states, Course Space creation/sharing/join simulation, Sarah with both workspace and contextual entry points). **Not committed to this repository** — it's a disposable testing tool, not a codebase to extend. |
+| Backend | B0/B1 code exists; user-provided Maven output reports 27/27 tests passing against PostgreSQL 18.3 with V3 applied. B1 corrections remain uncommitted. B2 implementation and PostgreSQL integration tests are in the working tree but have not passed Maven validation in this sandbox. |
+| Architecture | AD-066 through AD-070 define transfer, member-Card linkage, removal, join requests, and direct invitations. Transfer implementation remains gated on the AD-066/AD-067 memberCardId interaction, for which clarification has been requested. |
+| Frontend | Working Kotlin/Compose PDF-reader/auth/chat thin client; it predates the Card/Course Space pivot. See `frontend/README.md`. |
+| API contract | Live and authoritative at the network boundary; B2 sections extended from AD-066 through AD-070. |
+| UX prototype | Standalone HTML/CSS/JS artifact exists outside this repository; it remains the product reference. |
 
 ## What's next
 
-1. This cleanup (retiring old architecture references) — done.
-2. Architecture completeness pass (Card/Course Space/Sarah) — done,
-   2026-09-12, see `docs/DECISIONS.md` AD-019 through AD-028.
-3. Resolution of OQ-1 through OQ-5 — done, 2026-09-12, AD-029 through
-   AD-039.
-4. Resolution of OQ-6 and OQ-7 — done, 2026-09-12, AD-040 through AD-043.
-5. Resolution of OQ-8 — done, 2026-09-12, AD-044 through AD-047.
-6. External red-team adjudication (ChatGPT + Gemini review, reconciled
-   against the live repo) — **done, 2026-09-12.** AD-019 reviewed and
-   reaffirmed unchanged (full reasoning in `docs/DECISIONS.md`'s Revisions
-   log). AD-048 through AD-056 added: Card multiplicity, account-deletion
-   lifecycle, Quiz/Flashcard canonical-artifact-vs-personal-study-state
-   boundary, two Sarah security invariants, and the foundational domain
-   -truth/deterministic-authorization principle.
-7. Next: derive the actual API contract and backend implementation plan
-   from the now-decided architecture. A consolidated `docs/DOMAIN_MODEL.md`
-   remains a real, worthwhile future document — this round deliberately
-   did not create it, since only these specific items were approved for
-   this pass and `docs/DECISIONS.md` alone is sufficient to encode them.
-
+1. Resolve the AD-066/AD-067 `memberCardId` behavior across ownership transfer.
+2. Finish B2 lifecycle/security tests and validate migrations against PostgreSQL.
+3. Reconcile/commit the B1 corrections with B2, then complete and push B2.
 ## Three-way collaboration structure
 
 Unchanged by this retirement — this is a workflow pattern, not part of the

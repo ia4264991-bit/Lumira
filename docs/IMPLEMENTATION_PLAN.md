@@ -22,7 +22,7 @@ alongside this cleanup; see its own banner for current status) →
 order only).
 
 **This plan does not decide architecture.** Every milestone below is
-scoped to what AD-001–AD-065 already permit (AD-001–018 retired/
+scoped to what AD-001–AD-070 already permit (AD-001–018 retired/
 historical; AD-019 onward live — see `docs/DECISIONS.md`'s own banners).
 If a milestone turns out to need a decision that isn't in `DECISIONS.md`,
 that is not this document's job to invent.
@@ -142,14 +142,13 @@ MVP, do not silently pull forward:**
 - **Tests/validation**: A user can own multiple Cards; Card ownership is enforced; no cross-user Card access.
 - **Exit criteria**: Multiple named Cards, per user, persisted and retrievable — matching the validated UX prototype's repeatable Create-Card flow.
 
-### B2 — Course Spaces (Card capability, AD-019 — no separate entity)
-- **Objective**: Course Space behavior as a Card capability, per AD-019 (no separate entity).
-- **Scope**: The `card` table's own `isShared` boolean (AD-019's persistence note — a plain column on the same `card` row, never a discriminator that changes the row's type; this is *not* the same mechanism as AD-045's artifact-level share records used later in B4 — Card-level "is this Card currently a Course Space" and artifact-level "is this specific artifact exposed into that Course Space" are two different axes, and must not be conflated); `card_membership` with **`status` and `role` as two separate columns** (`id, cardId, userId, status, role, joinedAt`) — `status` is AD-032's `INVITED/ACTIVE/LEFT/REMOVED` lifecycle, `role` is AD-023/034's `OWNER/ADMIN/MEMBER` — these must never be merged into one field; ownership transfer (AD-042/043); leave/remove (AD-031/032); rejoin reuses existing Card (AD-033).
+### B2 — Course Spaces (Card capability, AD-019 - no separate entity)
+- **Objective**: Course Space behavior as a capability on the existing Card row, with membership, invite, join-request, and ownership lifecycle.
+- **Scope**: `card.isShared`; `card_membership` with distinct `cardId`, `userId`, `memberCardId`, `status`, and `role`; the four membership statuses and three roles; database-enforced ACTIVE/INVITED uniqueness; membership access independent from Card/artifact ownership; invite-link token/version rotation; separate `card_join_request` lifecycle; direct invitations as INVITED membership episodes with accept/decline/Owner withdrawal; join/rejoin using the recorded member Card; Owner-only member role/removal powers; leave, dissolve, and the exact atomic transfer result; emit `OWNERSHIP_TRANSFERRED`. No `CourseSpace` entity/table.
 - **Dependencies**: B1.
-- **Deliverables**: Migration adding `card.isShared` and the `card_membership` table (status + role as distinct columns); membership lifecycle service; ownership-transfer operation (single atomic action per AD-043); join-link generation/reset (AD-024).
-- **Tests/validation**: Owner cannot leave without transfer (AD-042); no ownerless Course Space ever; rejoin does not fork a new Card (AD-033); Admin cannot promote/demote (AD-034); toggling `isShared` never changes the row's type or creates a second table.
-- **Exit criteria**: A Card can become a Course Space, accept members with roles, and support ownership transfer — all on the same `card` row, with `status` and `role` independently queryable, and without a `CourseSpace` table existing anywhere (AD-019).
-
+- **Deliverables**: Flyway migration for membership, member-Card relationship, invite-link version, and join-request persistence; repositories/services/controllers; filtered Course Space Card reads and lifecycle API from `API_CONTRACT.md`; append-only transfer event emission required by AD-042/066.
+- **Tests/validation**: Real PostgreSQL tests for Owner/Admin/Member/INVITED and inactive-member access; direct invitation authorization/idempotency/accept/decline/withdrawal; join approval/rejection/reset invalidation; initial join/rejoin Card identity; partial unique index behavior; role/removal permissions per AD-034/068; Owner leave blocked until transfer; transfer target revalidation and exact roles; atomic persistence/event; no separate CourseSpace table.
+- **Exit criteria**: Sharing, membership, join/rejoin, link rotation, removal/leave, and transfer behave as specified by AD-019, AD-023/024/025, AD-031/032/033/034, AD-042/043, AD-060/061/062/066/067/068/069/070 and the API contract. `card` remains the sole workspace entity.
 ### B3 — Resources
 - **Objective**: The `Resource` entity and its processing lifecycle, per AD-021/AD-057 and `docs/RESOURCE_FILE_PROCESSING_SPEC.md`. *(Not a generalized versioning system — no `ResourceVersion`/`ContentVersion` entity is implied or required; see the note below.)*
 - **Scope**: Resource entity, ownership (two nullable FKs + CHECK per AD-057, resolving AD-021's mechanism gap — `owningCardId`/`owningUserId`, uniform across all artifact types); the persisted processing-lifecycle state (`UPLOADED/PROCESSING/READY/FAILED`, per the File Processing spec) as real columns on the `Resource` row itself, not a separate versioned-history table; access control tied to Card/Course Space ownership.
@@ -460,8 +459,9 @@ I1 (ongoing, paired) → I2 (needs everything) → I3 → I4 → I5
 |---|---|
 | AD-019, 048 | B1, B2 |
 | AD-021, 025, 030, 031, 033, 057, 060, 064 | B1–B5 |
-| AD-023, 032, 034, 042, 043, 061 | B2 |
-| AD-024, 062 | B2 |
+| AD-067 | B2 |
+| AD-023, 032, 034, 042, 043, 061, 066, 068 | B2 |
+| AD-024, 062, 069 | B2 |
 | AD-040, 041, 044, 045, 046, 047, 056 | B4, B11, I3 |
 | AD-026 (+ additive event types), 063 | B8 |
 | AD-027, 028, 037, 038, 054, 058 | B9 |

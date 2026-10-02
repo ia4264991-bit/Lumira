@@ -2,13 +2,13 @@
 
 Spring Boot backend foundation for Lumira, built around the Card / Course Space / Sarah architecture (`docs/DECISIONS.md`, `docs/DOMAIN_MODEL.md`, `API_CONTRACT.md`, `docs/IMPLEMENTATION_PLAN.md`).
 
-## Current Milestone Status: B1 (Identity + Personal Cards — code complete, tests written)
+## Current Milestone Status: B1 reconciliation; architecture blockers resolved, B2 next after validation
 
 Milestone B0 (Infrastructure / Foundation) is complete. Milestone B1 adds:
-- `User` entity + `V2__user_and_card.sql` migration (user + card tables, per AD-019/AD-048)
+- `User` entity + `V2`/`V3` migrations (`app_user` + card tables, per AD-019/AD-048/AD-057); B1 table-name/API corrections are locally unvalidated; B2 decisions are documented in AD-066 through AD-070
 - `Card` entity, `CardRepository`, `CardService`, `CardController`
 - `POST /v1/cards`, `GET /v1/cards`, `GET /v1/cards/{id}` — all `@RequireAuth`, owner-scoped
-- `CardIntegrationTest` covering AD-048 (multiple cards per user), AD-056 (cross-user 403), auth boundary
+- `CardIntegrationTest` covering AD-048 (multiple cards per user), AD-056 (cross-user 404), auth boundary; current suite has not yet run successfully in this environment
 
 B0 established:
 - Spring Boot 3.3.4 + Java 21 + PostgreSQL 16+ + Spring Data JPA + Flyway.

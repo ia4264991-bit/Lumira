@@ -1,6 +1,5 @@
 package com.lumira.backend.card;
 
-import com.lumira.backend.common.error.ForbiddenException;
 import com.lumira.backend.common.error.ResourceNotFoundException;
 import com.lumira.backend.user.User;
 import com.lumira.backend.user.UserRepository;
@@ -54,19 +53,12 @@ public class CardService {
 
     /**
      * Returns a single Card by id, verified to be owned by {@code ownerId}.
-     * Throws {@link ForbiddenException} rather than {@link ResourceNotFoundException}
-     * on ownership mismatch to avoid leaking card existence to non-owners (AD-056).
+     * Returns the same not-found result for an absent Card and a Card the
+     * caller cannot access, as required by the API contract's AD-056 BOLA guard.
      */
     @Transactional(readOnly = true)
     public Card getMyCard(UUID cardId, UUID ownerId) {
-        Card card = cardRepository.findById(cardId)
+        return cardRepository.findByIdAndOwnerId(cardId, ownerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Card not found: " + cardId));
-
-        // AD-056: authorization deterministic — never inferred from object existence
-        if (!card.isOwnedBy(ownerId)) {
-            // Return 403, not 404 — leaking "card exists but isn't yours" is an IDOR risk
-            throw new ForbiddenException("Access denied to card: " + cardId);
-        }
-        return card;
     }
 }

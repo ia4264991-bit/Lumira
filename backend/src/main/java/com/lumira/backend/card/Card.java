@@ -23,7 +23,7 @@ import java.util.UUID;
 @Table(name = "card")
 public class Card extends BaseEntity {
 
-    @Column(name = "owner_id", nullable = false, updatable = false)
+    @Column(name = "owner_id", nullable = false)
     private UUID ownerId;
 
     @Column(name = "name", nullable = false)
@@ -35,6 +35,15 @@ public class Card extends BaseEntity {
     /** Whether this Card is currently acting as a Course Space (AD-019). */
     @Column(name = "is_shared", nullable = false)
     private boolean isShared;
+
+    @Column(name = "invite_token", unique = true)
+    private String inviteToken;
+
+    @Column(name = "invite_token_version", nullable = false)
+    private long inviteTokenVersion;
+
+    @Column(name = "require_approval", nullable = false)
+    private boolean requireApproval;
 
     protected Card() {
         // JPA
@@ -83,6 +92,25 @@ public class Card extends BaseEntity {
     /** Package-private — sharing state is managed by the Course Space lifecycle (B2). */
     void setShared(boolean shared) {
         isShared = shared;
+    }
+
+    public String getInviteToken() { return inviteToken; }
+
+    public long getInviteTokenVersion() { return inviteTokenVersion; }
+
+    public boolean isRequireApproval() { return requireApproval; }
+
+    void resetInviteLink(String token) {
+        this.inviteToken = Objects.requireNonNull(token, "token cannot be null");
+        this.inviteTokenVersion++;
+    }
+
+    void setRequireApproval(boolean requireApproval) {
+        this.requireApproval = requireApproval;
+    }
+
+    void transferOwnership(UUID newOwnerId) {
+        this.ownerId = Objects.requireNonNull(newOwnerId, "newOwnerId cannot be null");
     }
 
     /**

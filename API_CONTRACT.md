@@ -1,6 +1,6 @@
 # Lumira API Contract
 
-**Status: LIVE, rebuilt 2026-09-12** from `docs/DECISIONS.md` (AD-019–065),
+**Status: LIVE, rebuilt 2026-09-12 and extended 2026-10-02** from `docs/DECISIONS.md` (AD-019–070),
 `docs/DOMAIN_MODEL.md`, `docs/RESOURCE_FILE_PROCESSING_SPEC.md`,
 `docs/SARAH_SECURITY_SPEC.md`, and `docs/IMPLEMENTATION_PLAN.md`. This
 supersedes the prior retired/historical version of this file (its content
@@ -99,124 +99,104 @@ GET /v1/cards/{cardId}
 
 ---
 
-## Course Space (Card capability — AD-019, no separate entity)
+## Course Space (Card capability - AD-019, no separate entity)
 
-Every endpoint below operates on `/v1/cards/{cardId}/...` — there is no
-`/v1/course-spaces/` path anywhere in this contract.
+Every endpoint below operates on `/v1/cards/{cardId}/...`; there is no `/v1/course-spaces/` resource.
 
 ### Enabling sharing
 
-```
+```http
 POST /v1/cards/{cardId}/share
 ```
-- Auth: required. Authorization 🔒: caller must be the Card's owner.
-- Effect: sets `isShared=true`; creates an `OWNER` `card_membership` row
-  for the caller if one doesn't already exist. No request body needed.
-- Response `200`: updated Card shape.
 
-### Invite link (AD-024, AD-062)
+- Auth required; only the Card owner may enable sharing.
+- Sets `isShared=true` and creates the Owner's ACTIVE/OWNER membership if absent. That membership's `memberCardId` is the Course Space Card itself (AD-067).
+- Response `200`: updated Card.
 
-```
-POST /v1/cards/{cardId}/share-link          — generate/reset
-GET  /v1/cards/{cardId}/share-link          — view current link
-```
-- Authorization 🔒: Owner or Admin may view/share; **only the Owner**
-  may generate/reset (AD-024).
-- 🔒 AD-062: resetting **invalidates any pending join request** submitted
-  via the link being replaced — those requests are marked void, not left
-  pending against a dead link.
-- Response: `{ "shareToken": "string", "url": "string", "requireApproval": "boolean" }`.
+### Invite link (AD-024, AD-062, AD-069)
 
-```
+```http
+POST  /v1/cards/{cardId}/share-link
+GET   /v1/cards/{cardId}/share-link
 PATCH /v1/cards/{cardId}/share-link/approval
 ```
-- Request: `{ "requireApproval": "boolean" }`.
-- Authorization: Owner (AD-025's approval toggle is an Owner-level
-  setting per the existing decision).
 
-### Joining
+- Owner and ACTIVE Admin may view/share the current link; only Owner may create/reset it.
+- Reset rotates the invite token and its separate `inviteTokenVersion`. It immediately invalidates the previous link and every PENDING join request tied to the prior version. No time-based expiry.
+- Response: `{ "shareToken": "string", "url": "https://...", "requireApproval": "boolean" }`. The version is persisted for request binding; it is not the invite secret and is not returned to clients.
+- Approval-toggle request: `{ "requireApproval": "boolean" }`; Owner only.
 
-```
+### Joining and approval (AD-025, AD-033, AD-062, AD-067, AD-069)
+
+```http
 POST /v1/join/{shareToken}
-```
-- Auth: required.
-- 🔒 AD-025: if `requireApproval=false`, this immediately creates the
-  joiner's new Card (auto-created, `role=MEMBER`, Resource references to
-  the origin's currently-shared Resources per AD-021/045 — never copies)
-  and an `ACTIVE` `card_membership` row. If `requireApproval=true`, this
-  creates a `PENDING` join request instead (a request, not yet a
-  membership row) — see approval endpoints below.
-- 🔒 AD-033: if the caller already owns a Card that was previously linked
-  to this same Course Space (a rejoin), a **new** `card_membership`
-  episode is created, linked to that **existing** Card — never a new Card,
-  never a new identity.
-- Response `201` (immediate join): the joiner's Card shape.
-- Response `202` (pending approval): `{ "status": "PENDING" }`.
-- Error: `410 Gone` if the token was reset/invalidated (AD-062).
-
-```
-GET  /v1/cards/{cardId}/join-requests        — Owner/Admin only, pending requests
+GET  /v1/cards/{cardId}/join-requests
 POST /v1/cards/{cardId}/join-requests/{requestId}/approve
 POST /v1/cards/{cardId}/join-requests/{requestId}/reject
 ```
-- Authorization: Owner or Admin.
-- Approving performs the same auto-Card-creation/reuse behavior described
-  above for immediate joins.
 
-### Membership (AD-023, AD-032, AD-060)
+- Join requires authentication. A stale or reset token returns `410 Gone`.
+- If approval is disabled, the request immediately creates an ACTIVE MEMBER membership and creates or reuses that user's member Card. A first join creates one Card; a rejoin locates the historical membership, reuses its `memberCardId`, and creates a new membership episode. The new/reused Card belongs to the requesting User. Resources are referenced, never copied, when the Resource feature is implemented; private study artifacts are not inherited.
+- Immediate join response `201`: the member Card shape.
+- If approval is enabled, joining creates only a separate PENDING `card_join_request`; it creates neither a membership nor a Card yet. Response `202`: `{ "joinRequestId": "uuid", "status": "PENDING" }`.
+- A request stores `id`, `cardId`, `requestingUserId`, `inviteTokenVersion`, `status`, `createdAt`, `resolvedAt`, and `resolvedByUserId`. Request statuses are `PENDING`, `APPROVED`, `REJECTED`, and `INVALIDATED`; these are not `card_membership` statuses. `resolvedAt` and `resolvedByUserId` are null while PENDING.
+- Only the Course Space Owner or an ACTIVE Admin may list, approve, or reject join requests. Approval revalidates the request's invite version and atomically creates an ACTIVE MEMBER membership referencing the created/reused member Card; response `201` is the member Card. Rejection records REJECTED and the resolver/time, creates no membership/Card, and returns `200` with `{ "status": "REJECTED" }`.
+- Reset invalidates old-version PENDING requests (AD-062/069); they cannot be approved. A new join request must use the current link.
 
-```
-GET /v1/cards/{cardId}/members
-```
-- Authorization: any active member.
-- Response: array of `{ "userId": "uuid", "status": "ACTIVE|LEFT|REMOVED|INVITED", "role": "OWNER|ADMIN|MEMBER", "joinedAt": "ISO-8601" }`.
-- 🔒 AD-060: at most one `ACTIVE`/`INVITED` row per `(cardId, userId)` —
-  the backend enforces this at the database layer; the API surface never
-  exposes duplicate current memberships for the same user.
+### Direct invitations (AD-032, AD-060, AD-067, AD-068, AD-070)
 
+```http
+POST   /v1/cards/{cardId}/invitations
+GET    /v1/me/invitations
+GET    /v1/me/invitations/{membershipId}
+POST   /v1/me/invitations/{membershipId}/accept
+POST   /v1/me/invitations/{membershipId}/decline
+DELETE /v1/cards/{cardId}/invitations/{membershipId}
 ```
-POST /v1/cards/{cardId}/members/{userId}/promote     — AD-034, Owner only
-POST /v1/cards/{cardId}/members/{userId}/demote       — AD-034, Owner only
-DELETE /v1/cards/{cardId}/members/{userId}            — remove; AD-034, Owner or Admin
-POST /v1/cards/{cardId}/leave                         — self-initiated (AD-042 blocks the Owner)
-```
-- 🔒 AD-034: promote/demote is Owner-only; Admins cannot grant or revoke
-  Admin status for anyone.
-- 🔒 AD-042: `POST .../leave` returns `409 Conflict` with a reason
-  indicating "transfer or dissolve required" if the caller is the current
-  Owner — the Owner cannot leave via this endpoint under any
-  circumstance without first transferring ownership.
-- 🔒 AD-063: dissolution (below) is the alternative to transfer, not to
-  this endpoint.
 
-### Ownership transfer (AD-042, AD-043, AD-061)
+- Owner or ACTIVE Admin may invite an existing User with `{ "userId": "uuid" }`. A new episode responds `201` with `{ "membershipId": "uuid", "userId": "uuid", "status": "INVITED", "role": "MEMBER" }`; an existing ACTIVE/INVITED membership responds `200` with its current membership representation unchanged. It references the invitee's created-or-reused member Card (AD-067/070). No duplicate membership, Card, or event is created for the idempotent case (AD-060/070).
+- Only the addressed invitee may view or respond to an invitation. Acceptance revalidates live persisted state and that the Course Space remains shared, then atomically changes `INVITED` to `ACTIVE`; decline changes it to `LEFT`. The same member Card is retained. INVITED grants no Course-Space access; acceptance grants only ordinary ACTIVE-member access.
+- The invitee's list endpoint returns only their own outstanding direct invitations; the item endpoint returns only the addressed invitation. Both expose the Course Space Card ID, membership ID, status, role, and creation time. Accept and decline return `200` with the updated membership representation; withdrawal returns `200` with `{ "status": "REMOVED" }`.
+- Only the Owner may withdraw a pending invitation. Withdrawal changes `INVITED` to `REMOVED`; it grants no access and retains the episode/history. Admin withdrawal is forbidden (AD-068/070).
+- Invitation, acceptance, decline, and withdrawal emit `MEMBER_INVITED`, `MEMBER_INVITATION_ACCEPTED`, `MEMBER_INVITATION_DECLINED`, and `MEMBER_INVITATION_WITHDRAWN` respectively. Events are string-backed (AD-026/070).
+- These endpoints are distinct from `POST /v1/join/{shareToken}`, the public invite-link flow.
 
+### Membership (AD-023, AD-032, AD-034, AD-060, AD-067, AD-068)
+
+```http
+GET    /v1/cards/{cardId}/members
+POST   /v1/cards/{cardId}/members/{userId}/promote
+POST   /v1/cards/{cardId}/members/{userId}/demote
+DELETE /v1/cards/{cardId}/members/{userId}
+POST   /v1/cards/{cardId}/leave
 ```
+
+- Member statuses are exactly `INVITED`, `ACTIVE`, `LEFT`, `REMOVED`; `status` and `role` are separate axes. At most one ACTIVE/INVITED membership exists per `(cardId,userId)` (AD-060).
+- `card_membership` relates `cardId` to the Course Space Card, `userId` to the User, and `memberCardId` to that user's member Card. Historical LEFT/REMOVED episodes retain the Card link (AD-067).
+- Any ACTIVE member may list members. Response entries: `{ "userId": "uuid", "status": "ACTIVE|LEFT|REMOVED|INVITED", "role": "OWNER|ADMIN|MEMBER", "joinedAt": "ISO-8601" }`.
+- Only the Owner may promote/demote or remove a Member/Admin. Admins cannot promote, demote, or remove anyone. The Owner cannot be removed through this endpoint (AD-034/068).
+- Leave is self-initiated by an ACTIVE non-Owner. Owner leave returns `409 Conflict` until the Owner first transfers ownership or dissolves the Course Space (AD-042/063).
+
+### Ownership transfer (AD-042, AD-043, AD-061, AD-066)
+
+```http
 POST /v1/cards/{cardId}/transfer-ownership
 ```
-- Request: `{ "targetUserId": "uuid" }`.
-- Authorization: current Owner only.
-- 🔒 AD-061: target eligibility (must hold an `ACTIVE` membership) is
-  revalidated **at completion**, inside the same transaction — if the
-  target's membership changed since the request was received, this fails
-  with `409 Conflict` rather than completing against a stale target.
-- 🔒 AD-043: single atomic operation — no multi-step workflow, no
-  invitation/acceptance step.
-- Effect: emits `OWNERSHIP_TRANSFERRED` event (AD-026 extended types).
+
+- Request: `{ "targetUserId": "uuid" }`; only the current Owner may initiate.
+- Target must be an existing ACTIVE member, revalidated at completion inside the atomic transaction (AD-061). A no-longer-eligible target returns `409 Conflict`.
+- On success, `card.owner_id` and the target membership role become the new Owner; the previous Owner becomes ADMIN and remains ACTIVE. Exactly one ACTIVE OWNER membership matches `card.owner_id` before and after. The previous Owner may later leave normally (AD-066).
+- Emits `OWNERSHIP_TRANSFERRED`. No transfer request/acceptance flow and no automatic/random assignment.
 
 ### Dissolution (AD-051, AD-063)
 
-```
+```http
 DELETE /v1/cards/{cardId}/share
 ```
-- Authorization: current Owner only.
-- 🔒 AD-063: deactivates all active share records for this Course Space;
-  never deletes any artifact, never changes any artifact's ownership,
-  never touches any member's private content. Sets `isShared=false`.
-  Historical events remain (AD-052).
+
+- Current Owner only. Sets `isShared=false` and deactivates all active share records for this Course Space. It never deletes artifacts, changes ownership, or touches member-private content. Historical events remain.
 
 ---
-
 ## Resources (AD-021, AD-057, `RESOURCE_FILE_PROCESSING_SPEC.md`)
 
 ```
@@ -475,3 +455,8 @@ repeated here, since the shapes above supersede them entirely.
 - **2026-09-12** — Retired (academic-hierarchy architecture retirement).
 - **2026-09-12** — Rebuilt as authoritative, derived from AD-019–065 and
   the four governing specification/domain documents.
+- **2026-10-02** — Updated the B2 contract from AD-066 through AD-069:
+  transfer result, member Card linkage, removal authority, and separate
+  join-request lifecycle.
+- **2026-10-02** — Added direct invitation endpoints and the complete
+  `INVITED` membership lifecycle per AD-070.

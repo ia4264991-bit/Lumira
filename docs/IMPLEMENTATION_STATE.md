@@ -9,15 +9,16 @@ correct without checking.
 
 ```
 CURRENT_PHASE: Backend Implementation
-CURRENT_MILESTONE: B2 — Course Spaces
+CURRENT_MILESTONE: B2 - Course Spaces
 STATUS: IN_PROGRESS
-LAST_COMPLETED_MILESTONE: B1 — Identity + Personal Cards
-IN_PROGRESS: B2 — Course Spaces
-NEXT_MILESTONE: B3 — Resources
-BLOCKERS: None
-LAST_VALIDATED_COMMIT: 809b1b1
-LAST_VALIDATION: 2026-09-30 — Full test suite (27 tests) executed against live PostgreSQL 18.3. All 27 tests passed: CardIntegrationTest (10 tests covering AD-048 multi-card, AD-056 IDOR guard / cross-user 403, 401 unauthenticated, 400 validation), ArtifactOwnerTest (4 tests), GlobalExceptionHandlerTest (6 tests), DatabaseIntegrationTest (3 tests), LumiraBackendApplicationTests (2 tests), SecurityScaffoldingTest (4 tests).
-NOTES: B1 exit criteria fully satisfied. Moving to B2 (Course Spaces: card sharing capability, card_membership table, share links/tokens, role/status axes).
+LAST_COMPLETED_MILESTONE: B0 - Infrastructure/Foundation
+IN_PROGRESS: B2 Course Space persistence, lifecycle, and authorization
+NEXT_MILESTONE: B2 - Course Spaces implementation
+BLOCKERS: Transfer code/tests remain gated on clarifying AD-066/AD-067: transfer changes the shared Card owner and target/former-Owner roles, while AD-067 requires each membership's memberCardId to point to a Card owned by that member and the Owner membership to point to the shared Card. Maven test validation in this Codex sandbox is currently blocked by java.nio.file.AccessDeniedException while javac closes a dependency JAR; Maven must run successfully in the user's external PowerShell environment before B2 can be validated.
+LAST_VALIDATED_COMMIT: working tree based on fa4134e86fa94ffa6056ae147c32aa339435bb4b (B1 corrections are present locally but not committed)
+LAST_VALIDATION: 2026-10-02 - User-provided external Maven output reports BUILD SUCCESS and 27 tests passing on PostgreSQL 18.3. Flyway validated three migrations and applied V3 (rename user to app_user); Hibernate initialized successfully. This validates the local B1 corrections in the provided run. The B1 correction commit is still outstanding.
+ARCHITECTURE_BLOCKER: Clarification requested for the AD-066/AD-067 transfer/memberCardId interaction. Other B2 paths are under implementation, including sharing, live Card authorization, invite links, join requests, direct invitations, membership lifecycle, event persistence, and PostgreSQL-backed integration tests.
+NOTES: Direct invitations use INVITED membership episodes per AD-070; do not introduce PENDING as a membership status. Ownership transfer remains unimplemented pending clarification. No B2 code or tests have yet passed Maven validation in this sandbox.
 ```
 
 ---

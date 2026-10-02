@@ -612,6 +612,87 @@ closes the persistence-mechanism gap it explicitly left open.
   simpler, safer default for now rather than leaving the granularity
   unspecified.)*
 
+### Additive decisions and revisions (2026-10-02)
+
+- **AD-066 (additive clarification to AD-042/AD-043 — ownership-transfer
+  outcome)** — The current Owner alone initiates one atomic transfer to an
+  existing member whose `card_membership.status` is `ACTIVE`. At commit,
+  the target's membership is revalidated in the same transaction (AD-061).
+  `card.owner_id` changes to the target; the target's membership role
+  becomes `OWNER`; the previous Owner's role becomes `ADMIN` and their
+  membership remains `ACTIVE`. The Card ownership field remains the
+  authoritative ownership axis; the membership role records the matching
+  administration authority. Exactly one active membership has role
+  `OWNER` before and after the operation, and its `userId` matches
+  `card.owner_id`. The operation emits `OWNERSHIP_TRANSFERRED`. The former
+  Owner may later leave through the ordinary leave operation. There is no
+  automatic or random owner assignment. This dated addition resolves the
+  outgoing Owner role left to the transfer operation's specification by
+  AD-042; it does not rewrite AD-042's historical text.
+
+- **AD-067 (additive mechanism closure for AD-033 — member Card link)** —
+  Every `card_membership` episode records `memberCardId` as a foreign-key
+  relationship to the member's `Card`, in addition to `cardId` (the shared
+  Course Space Card) and `userId`. The referenced member Card must be owned
+  by that `userId`. The Owner membership references the Course Space Card
+  itself as its member Card. On a user's first join, the system creates one
+  member Card for that Course Space and stores its ID on the ACTIVE
+  membership. On rejoin, it finds the user's historical membership for
+  that Course Space, reuses its `memberCardId`, and creates a new membership
+  episode; prior LEFT/REMOVED rows remain unchanged. Rejoin never creates
+  another Card or identity. This relationship does not transfer ownership:
+  membership continues to govern Course-Space access only (AD-031).
+  Resource references are populated only as specified by AD-025 when the
+  Resources milestone exists; no resources are copied.
+
+- **AD-068 (additive clarification to AD-034 — removal authority)** — The
+  Owner may remove a Member or Admin. An Admin may remove neither Members,
+  Admins, nor the Owner. No member-removal operation may remove the Owner;
+  only the explicit transfer operation (AD-042/AD-066) can change who the
+  Owner is. This supersedes the historical Owner/Admin-initiated shorthand for REMOVED in AD-032 and the inconsistent
+  Owner/Admin removal wording in the API contract. AD-034's
+  historical text is unchanged.
+
+- **AD-069 (join-request lifecycle for AD-025/AD-062; membership statuses
+  unchanged)** — An approval-required join is represented by a separate
+  `card_join_request`, never by a `card_membership` status. Its conceptual
+  fields are `id`, `cardId` (the shared Course Space Card FK),
+  `requestingUserId` (User FK), `inviteTokenVersion` (the identity/version
+  of the link used), `status`, `createdAt`, `resolvedAt`, and
+  `resolvedByUserId` (null while pending). Request statuses are `PENDING`,
+  `APPROVED`, `REJECTED`, and `INVALIDATED`; only PENDING is non-terminal.
+  Submitting through a link with `requireApproval=true` creates a PENDING
+  request and creates neither a membership nor a member Card. The Owner or
+  an ACTIVE Admin may approve or reject a PENDING request. Rejection sets
+  REJECTED and records resolver/time without creating a membership or
+  Card. Approval revalidates that the request's token version is still the
+  Card's current invite-link version, then creates an ACTIVE MEMBER
+  membership and creates or reuses the requesting user's member Card per
+  AD-067; it records APPROVED and resolver/time atomically. Resetting the
+  link rotates its token version and marks every PENDING request carrying
+  the old version INVALIDATED, recording the reset actor/time; such a
+  request cannot later be approved. The statuses on `card_membership`
+  remain exactly `INVITED`, `ACTIVE`, `LEFT`, and `REMOVED` (AD-032).
+  Link-version identity is not the secret invite token itself. This
+  decision closes the persistence/lifecycle gap identified by AD-062 without
+  introducing a CourseSpace entity or a PENDING membership status.
+
+- **AD-070 (direct member invitations; additive to AD-032/034/060/067/068/069)** — The Course Space Owner or an ACTIVE Admin may directly invite an existing User. The invitation is a `card_membership` episode itself, with `status=INVITED`, `role=MEMBER`, the Course Space `cardId`, the invited `userId`, and that user's member `memberCardId` per AD-067. No second membership or invitation entity is introduced. If no member Card exists in the user's historical membership episodes for this Course Space, create one owned by the invitee and record it on the INVITED membership; otherwise reuse the retained member Card. Creating the Card and INVITED membership does not grant Course-Space access.
+
+  An invite targeting a User who already has an ACTIVE or INVITED membership for the same `(cardId,userId)` is idempotently handled by returning the existing current membership unchanged: no new episode, Card, or event is created. Creating a new INVITED episode emits `MEMBER_INVITED`. After a LEFT or REMOVED episode, a new invitation creates a new INVITED episode and reuses the historical member Card. Only one ACTIVE/INVITED episode is permitted per AD-060.
+
+  The invitee must explicitly accept or decline their own INVITED membership. Acceptance re-reads persisted membership, User, Card, and current sharing state; only the invited `userId` may accept. In one transaction it changes `INVITED` to `ACTIVE`, retains the same `memberCardId`, and records `MEMBER_INVITATION_ACCEPTED`. An INVITED membership has no Course-Space-mediated access; acceptance does not grant ownership of the Course Space, other members' Cards, or artifacts beyond ordinary ACTIVE-member access rules.
+
+  Declining an invitation is self-initiated and changes `INVITED` to `LEFT`, retaining the episode and member Card; it records `MEMBER_INVITATION_DECLINED` and grants no access. The Course Space Owner may withdraw an unaccepted invitation, changing `INVITED` to `REMOVED` and retaining its history; this is Owner removal under AD-068 and records `MEMBER_INVITATION_WITHDRAWN`. Admins cannot withdraw invitations. A new invitation after either terminal state creates a fresh episode and reuses the same member Card. All four event names are ordinary string-backed AD-026 event types, not enum values. Public invite-link joins remain the distinct AD-025/069 flow; once approved or open-joined they produce ACTIVE membership directly.
+
+- **Revision note (2026-10-02)** — AD-066 and AD-067 add the previously
+  unspecified transfer result and member-Card relationship without
+  changing the historical wording of AD-042 or AD-033. AD-068 resolves
+  removal authority with an additive clarification to AD-034; AD-069
+  specifies the separate approval-request lifecycle referenced by AD-025
+  and AD-062. The API contract and derived documents are updated in this
+  same documentation change.
+
 ### Deliberately left as an extension point, not designed now
 
 - **Offline/download capability** — the original design doc's distinction
@@ -658,6 +739,13 @@ of the previous three passes did.
 ---
 
 ## Revisions (new architecture)
+
+- 2026-10-02 — AD-066 through AD-069 added from the product owner's
+  explicit decision set: transfer outcome, member-Card FK, exact removal
+  authority, and separate join-request lifecycle. Historical AD-033,
+  AD-034, and AD-042 text was retained; additive entries clarify and
+  supersede only the noted gaps/contradictions. Direct-invitation
+  AD-070 closes the direct-invitation lifecycle question for `INVITED`.
 
 - 2026-09-12 — AD-019 through AD-028 added: first formal architecture pass
   for the Card/Course Space/Sarah model, following the retirement of the

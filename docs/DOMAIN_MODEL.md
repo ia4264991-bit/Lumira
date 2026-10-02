@@ -1,6 +1,6 @@
 # Lumira — Domain Model
 
-**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-056.**
+**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-070.**
 This document consolidates already-frozen decisions into one coherent
 domain specification — it does not decide anything new. Where a mechanism
 is genuinely unresolved in `DECISIONS.md`, it is marked as such here, not
@@ -166,94 +166,41 @@ features, all expressed on the same `card` row and its related tables:
 
 ## 9. Membership and Roles
 
-**AD-023** — Three roles: **Owner** (exactly one, non-transferable except
-via the explicit operation in §11), **Admin** (zero or more), **Member**
-(zero or more). Admins may add Resources (shared by default per AD-022)
-and share the existing invite link. Only the Owner may remove members and
-dissolve the Course Space (see terminology note below).
+**AD-023** defines three roles: Owner (exactly one), Admin (zero or more), and Member (zero or more). The Owner is also the Card owner; `card.owner_id` remains the authoritative ownership field. The membership role records administration authority and must agree with that owner.
 
-**AD-032** — `card_membership.status` ∈ `{INVITED, ACTIVE, LEFT, REMOVED}`
-— a field **distinct from** `role`. `LEFT` (self-initiated) and `REMOVED`
-(Owner/Admin-initiated) have identical access effects, differing only in
-provenance (recorded via `MEMBER_LEFT`/`MEMBER_REMOVED` events, §13).
+**AD-032** defines `card_membership.status` as one of `INVITED`, `ACTIVE`, `LEFT`, or `REMOVED`, distinct from `role`. Only ACTIVE memberships grant Course-Space-mediated access. LEFT is self-initiated; REMOVED is Owner-initiated per AD-068. Both revoke access and retain their distinct provenance through the corresponding event.
 
-- **Persistence**: `card_membership` (`id`, `cardId`, `userId`, `status`,
-  `role`, `joinedAt`).
+**Persistence (AD-067)**: `card_membership` contains `id`, `cardId`, `userId`, `memberCardId`, `status`, `role`, and `joinedAt`. `cardId` references the shared Course Space Card. `userId` references the member User. `memberCardId` references a Card owned by that User. The Owner's membership points `memberCardId` to the Course Space Card itself. Each episode retains its member Card relationship, including historical LEFT/REMOVED rows.
 
-**AD-034** — Only the **Owner** may promote Member→Admin, demote
-Admin→Member, remove an Admin, or remove a Member. Admins cannot grant or
-revoke Admin status for anyone. The Owner cannot be removed by an Admin.
+**AD-034 / AD-068**: only the Owner may promote Member to Admin, demote Admin to Member, or remove a Member or Admin. An Admin cannot promote, demote, or remove anyone. No member-removal operation can remove the Owner.
 
-**AD-025 / AD-033** — Joining is open by default (Owner may require
-approval). Joining **auto-creates a new Card** for the joiner (`role =
-Member`), with Resource references to the origin's currently-shared
-Resources — the joiner's Notes/Quizzes/Flashcards/Sarah conversation start
-**empty**, never inherited. Rejoining creates a **new** `card_membership`
-row but links to the user's **existing** Card — never forks a new Card or
-identity.
+**AD-025 / AD-033 / AD-067**: initial join creates a member Card owned by the joiner and an ACTIVE MEMBER membership referencing that Card. When Resources exist, the new Card receives references to currently shared Resources; no content is copied. Private notes, quizzes, flashcards, and Sarah conversations start empty. Rejoin locates the historical membership, reuses its `memberCardId`, and creates a new membership episode. Prior LEFT/REMOVED episodes remain. Rejoin creates neither a second Card nor a second identity.
 
-**AD-031** — Membership governs access only, never ownership. A user's
-Card and every personally-owned artifact on it survive leaving or removal
-**unconditionally**. Nothing is auto-deleted; nothing is auto-transferred.
+**AD-031**: membership governs access only, never ownership. A user's Card and personally owned artifacts survive leaving or removal. Nothing is auto-deleted or auto-transferred.
 
-**Terminology note (2026-09-12, `DECISIONS.md` inline)**: AD-023's
-"archive/un-share the Course Space" and AD-051's "dissolve" refer to the
-**same operation** — "dissolve" is the canonical term going forward.
-Whether a separate, *reversible* "archive" state (distinct from permanent
-dissolution) should exist was never decided and is not invented here.
+**AD-060**: a partial unique index permits at most one ACTIVE or INVITED membership for each `(cardId, userId)` pair. Historical LEFT/REMOVED episodes are retained without limit.
 
-**AD-060 (membership uniqueness)** — At most one `card_membership` row
-with status `ACTIVE` or `INVITED` may exist for a given `(cardId,
-userId)` pair at any time — enforced as a partial unique database index,
-not application logic alone. Historical `LEFT`/`REMOVED` rows are
-retained without limit; this invariant only prevents duplicate *current*
-memberships.
+**AD-069 (join requests)**: when approval is required, a separate `card_join_request` stores `id`, `cardId`, `requestingUserId`, `inviteTokenVersion`, `status`, `createdAt`, `resolvedAt`, and `resolvedByUserId`. Status is `PENDING`, `APPROVED`, `REJECTED`, or `INVALIDATED`; PENDING alone is non-terminal. The Owner or an ACTIVE Admin may approve/reject. Rejection creates no membership or Card. Approval revalidates the link version and atomically creates an ACTIVE MEMBER membership referencing the created/reused member Card. Link reset rotates the version and invalidates all pending requests tied to the previous version, recording actor and time. Join-request statuses are not membership statuses; AD-032's four membership values are unchanged.
 
-**AD-063 (dissolution)** — Dissolving a Course Space deactivates all of
-its active share records (AD-045) — shared content stops being visible
-through it. It never deletes an artifact, never changes ownership, and
-never touches any member's own private content. Historical events remain
-per AD-052.
+**AD-070 (direct invitations)**: the Owner or ACTIVE Admin may invite an existing User. A direct invitation is an `INVITED`/`MEMBER` `card_membership` episode tied to the Course Space Card and invited User, with `memberCardId` referencing that user's retained member Card (AD-067). Create a member Card only if no historical membership identifies one; otherwise reuse it. INVITED grants no Course-Space access. An existing ACTIVE/INVITED episode is returned unchanged (idempotent); after LEFT/REMOVED, create a new episode reusing the same member Card. The invitee alone may accept or decline. Acceptance validates current persisted state and sharing, atomically changes INVITED to ACTIVE, and retains `memberCardId`. Decline changes it to LEFT. Only the Owner may withdraw an unaccepted invitation; withdrawal changes it to REMOVED. Both retain history and grant no access. Invitation, acceptance, decline, and withdrawal events are string-backed: `MEMBER_INVITED`, `MEMBER_INVITATION_ACCEPTED`, `MEMBER_INVITATION_DECLINED`, and `MEMBER_INVITATION_WITHDRAWN`. Public invite-link joins remain a separate entry flow (AD-025/069).
+
+**AD-063**: dissolving a Course Space deactivates its active share records, without deleting artifacts, changing ownership, or touching private content. Historical events remain.
 
 ---
-
 ## 10. Invite Link
 
-**AD-024** — A single, revocable HTTPS App Link per Course Space
-(explicitly not Firebase Dynamic Links). Resetting invalidates the old
-link immediately; no time-based expiry. Owner and Admins may both view/
-share the current link.
+**AD-024**: one revocable HTTPS App Link per Course Space. Resetting immediately invalidates the old link; there is no time-based expiry. Owner and Admin may view/share the current link; only Owner may generate/reset it.
 
-- **Persistence**: `shareToken` column on `card`, regenerated on reset.
+**Persistence (AD-024 / AD-069)**: the Card stores the current invite token and a separate `inviteTokenVersion`. Reset regenerates both. The version identifies which link generation a join request used; it is not the secret invite token.
 
-**AD-062** — Resetting the link also invalidates any join request still
-pending approval that was submitted via the link being reset — the whole
-point of a reset is to cut off access tied to that link, including
-requests not yet actioned. A voided request must be resubmitted via the
-new link.
+**AD-062 / AD-069**: resetting the link marks every PENDING `card_join_request` for the prior version INVALIDATED and records the reset actor/time. An invalidated request cannot later be approved; the user must submit a new request using the current link.
 
 ---
-
 ## 11. Ownership Transfer
 
-**AD-042** — The Owner **cannot leave while still Owner.** Transfer is a
-required, minimal, atomic operation: only the current Owner may initiate
-it, targeting exactly one specific existing eligible member (no
-self-transfer, no automatic/random assignment), recorded as an
-`OWNERSHIP_TRANSFERRED` event. The previous Owner's role becomes Admin or
-Member per the operation's own specification. There is exactly one Owner
-at all times — never ownerless, never auto-assigned.
-
-**AD-061** — Target eligibility is revalidated **at completion**, not
-only at initiation, within the same atomic transaction — if the target's
-membership changed in between, the transfer fails rather than completing
-against a no-longer-eligible member.
-
-**AD-043** — Intentionally minimal: a single atomic action, no multi-step
-workflow, no requests/invitations, no voting.
+**AD-042 / AD-043 / AD-061 / AD-066**: the current Owner alone initiates one atomic transfer to a specific existing ACTIVE member. The target's ACTIVE membership is revalidated at completion in the same transaction. `card.owner_id` changes to the target; the target's role becomes OWNER; the previous Owner's role becomes ADMIN and their membership remains ACTIVE. Exactly one ACTIVE OWNER membership matches `card.owner_id` before and after. Emit `OWNERSHIP_TRANSFERRED`. The previous Owner may subsequently leave normally. No automatic/random assignment, transfer request, or multi-step workflow exists.
 
 ---
-
 ## 12. Sharing and Share Records
 
 **AD-022** — Ownership and sharing/visibility are separate concerns.
@@ -476,6 +423,9 @@ AD-044 are all specific instances of — it replaces none of them.
 
 ## 18. Explicitly Deferred / Unresolved
 
+- Direct user-targeted invitation creation and acceptance for `INVITED` are
+  specified by AD-070 and the corresponding `API_CONTRACT.md` endpoints.
+
 Marked here so no implementation agent infers a decision that hasn't been
 made:
 
@@ -510,10 +460,15 @@ made:
 User (deferred identity model)
   └── owns → Card (0..N, AD-048)
                 ├── isShared: boolean (AD-019) — same row, never forks type
-                ├── card_membership (0..N) — status × role, independent axes
+                ├── card_membership (0..N)
+                │     cardId → Course Space Card
+                │     userId → User
+                │     memberCardId → member Card (AD-067)
                 │     status: INVITED | ACTIVE | LEFT | REMOVED (AD-032)
-                │     role:   OWNER | ADMIN | MEMBER (AD-023/034)
-                ├── shareToken (AD-024)
+                │     role: OWNER | ADMIN | MEMBER (AD-023/034/068)
+                ├── card_join_request (0..N, AD-069)
+                │     separate PENDING/APPROVED/REJECTED/INVALIDATED lifecycle
+                ├── shareToken + inviteTokenVersion (AD-024/069)
                 ├── owns → Resource / Note / StudySet / Summary / Quiz /
                 │          FlashcardSet / Sarah-conversation
                 │            └── ShareRecord (0..1 per Course Space, AD-045)

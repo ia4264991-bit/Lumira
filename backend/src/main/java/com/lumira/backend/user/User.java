@@ -17,7 +17,7 @@ import java.util.UUID;
  * provides the minimum identity needed to attribute artifacts to a user.
  */
 @Entity
-@Table(name = "\"user\"")
+@Table(name = "app_user")
 public class User extends BaseEntity {
 
     @Column(name = "email", nullable = false, unique = true)

@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Uses the {@link com.lumira.backend.security.FoundationTokenResolver}:
  * a valid UUID in the Bearer token resolves to that UUID as the userId.
- * Users must exist in the {@code "user"} table before Cards can be attributed.
+ * Users must exist in the {@code app_user} table before Cards can be attributed.
  */
 @DisplayName("B1 — Identity + Personal Cards")
 class CardIntegrationTest extends BaseIntegrationTest {
@@ -40,18 +40,17 @@ class CardIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void insertTestUsers() {
         // Clean state — order matters due to FK card → user
-        jdbcTemplate.execute("DELETE FROM card");
-        jdbcTemplate.execute("DELETE FROM \"user\"");
+        jdbcTemplate.execute("TRUNCATE course_space_event, card_join_request, card_membership, card, app_user");
 
         userAId = UUID.randomUUID();
         userBId = UUID.randomUUID();
 
         jdbcTemplate.update(
-                "INSERT INTO \"user\" (id, email, display_name) VALUES (?, ?, ?)",
+                "INSERT INTO app_user (id, email, display_name) VALUES (?, ?, ?)",
                 userAId, "alice@example.com", "Alice"
         );
         jdbcTemplate.update(
-                "INSERT INTO \"user\" (id, email, display_name) VALUES (?, ?, ?)",
+                "INSERT INTO app_user (id, email, display_name) VALUES (?, ?, ?)",
                 userBId, "bob@example.com", "Bob"
         );
     }
@@ -129,8 +128,8 @@ class CardIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("AD-056: user B gets 403 when fetching user A's card by id")
-    void getCard_crossUserAccess_returns403() {
+    @DisplayName("AD-056: user B gets 404 when fetching user A's card by id")
+    void getCard_crossUserAccess_returns404() {
         CardResponse aliceCard = createCard(userAId, "Alice's Secret Card", null).getBody();
         assertThat(aliceCard).isNotNull();
 
@@ -141,7 +140,7 @@ class CardIntegrationTest extends BaseIntegrationTest {
                 url("/v1/cards/" + aliceCard.id()), HttpMethod.GET, entity, Map.class
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test

@@ -1,9 +1,14 @@
 package com.lumira.backend.card;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import jakarta.persistence.LockModeType;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -18,4 +23,20 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
     List<Card> findByOwnerIdOrderByCreatedAtDesc(UUID ownerId);
 
     boolean existsByIdAndOwnerId(UUID id, UUID ownerId);
+
+    Optional<Card> findByIdAndOwnerId(UUID id, UUID ownerId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Card c where c.id = :id")
+    Optional<Card> findByIdForUpdate(@Param("id") UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Card> findByInviteToken(String inviteToken);
+
+    List<Card> findByIdInAndIsSharedTrue(List<UUID> ids);
+
+    @Query("select c, m.role from Card c left join CardMembership m on m.cardId = c.id and m.userId = :userId and m.status = :active " +
+            "where c.isShared = true and (c.ownerId = :userId or m.id is not null) order by c.createdAt desc")
+    List<Object[]> findSharedCardsForUser(@Param("userId") UUID userId,
+                                          @Param("active") MembershipStatus active);
 }
