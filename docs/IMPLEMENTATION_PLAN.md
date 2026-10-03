@@ -221,10 +221,10 @@ MVP, do not silently pull forward:**
 
 ### B10 — Sarah Generation
 - **Objective**: AI-generated artifacts as ordinary Lumira artifacts (AD-035/036/055).
-- **Scope**: Summary, Flashcard, Quiz, and Study Set generation via Sarah — **in MVP scope, not deferred for being AI (AD-035)**; generated artifacts persisted as ordinary rows of their normal type, generation method as at most a provenance attribute, never a distinct type (AD-036, AD-030's no-forking rule applied); **Sarah's output validated — schema, domain, and authorization validation — before persistence, never trusted merely because it was generated (AD-055).**
+- **Scope**: FlashcardSet, Quiz, and StudySet generation via Sarah, persisted as ordinary canonical artifacts (AD-030/036); generation method/provenance is not a separate type. Validate output schema, domain, and authorization before persistence (AD-055/065). Summary remains intended MVP scope but its concrete artifact contract is deferred under AD-081; B10 must not implement it.
 - **Dependencies**: B5, B6, B7 (the artifact types must exist first), B9 (the authorized pipeline).
-- **Deliverables**: Generation endpoints per artifact type, routed through B9's pipeline; output validation layer.
-- **Tests/validation**: A malformed or adversarial Sarah output is rejected before it reaches persistence — this needs an actual adversarial test, not just a happy-path one; a generated Quiz is indistinguishable in the schema from a manually created one except for its provenance attribute.
+- **Deliverables**: Generation endpoint for FlashcardSet, Quiz, and StudySet, routed through B9's authorization/context/usage pipeline; output validation layer. No Summary entity/schema/DTO/endpoint.
+- **Tests/validation**: PostgreSQL tests prove authorized sources only, ordinary artifact persistence, complete output validation, and adversarial/malformed output rejection before persistence. A generated Quiz uses the same canonical Quiz model as manual creation. Summary is explicitly excluded until its artifact contract is decided.
 - **Exit criteria**: Sarah can generate a real, stored, editable, shareable artifact of each of the four types.
 
 ### B11 — Backend Integration + Security
@@ -459,6 +459,7 @@ I1 (ongoing, paired) → I2 (needs everything) → I3 → I4 → I5
 | AD-026, 039, 063, 079 (+ additive event types) | B8 |
 | AD-027, 028, 037, 038, 054, 058 | B9 |
 | AD-035, 036, 055, 059, 065 | B10 |
+| AD-081 | B10 (Summary boundary) |
 | AD-049–052, 063 | B11, ADM-2, I2 |
 | AD-053, 077 | B6, B7 |
 

@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 import java.util.UUID;
 
@@ -30,5 +32,12 @@ public class SarahController {
     public SarahAskResponse askContextual(@PathVariable UUID resourceId,
             @Valid @RequestBody ContextualAskRequest request, @CurrentUser AuthenticatedUser user) {
         return service.askContextual(resourceId, user.userId(), request);
+    }
+
+    @PostMapping("/cards/{cardId}/sarah/generate")
+    @ResponseStatus(HttpStatus.CREATED)
+    public SarahGeneratedArtifact generate(@PathVariable UUID cardId,
+            @Valid @RequestBody SarahGenerationRequest request, @CurrentUser AuthenticatedUser user) {
+        return service.generate(cardId, user.userId(), request);
     }
 }

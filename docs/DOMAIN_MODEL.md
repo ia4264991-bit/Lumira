@@ -1,6 +1,6 @@
 # Lumira — Domain Model
 
-**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-077.**
+**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-081.**
 This document consolidates already-frozen decisions into one coherent
 domain specification — it does not decide anything new. Where a mechanism
 is genuinely unresolved in `DECISIONS.md`, it is marked as such here, not
@@ -456,6 +456,13 @@ Builder (AD-028/054) → Model Provider → generated artifact persisted to
 the Card`. **Usage metering/limit enforcement is server-authoritative** —
 the client never calculates or enforces its own limit; the AI Usage meter
 UI must read a backend-computed value.
+
+**AD-081 — Summary implementation boundary:** Summary remains a first-class
+artifact concept, and Sarah generation remains intended MVP scope, but its
+concrete content/persistence/DTO/API contract is deferred. B10 must not
+create a Summary entity, table, DTO, endpoint, or generated placeholder.
+Generation proceeds only for FlashcardSet, Quiz, and StudySet, whose
+concrete domain, persistence, and API models already exist.
 
 **AD-038** — The AI Router is an abstraction layer from the outset
 (mirroring the existing `StorageService` pattern), so provider/tier

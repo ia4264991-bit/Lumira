@@ -112,6 +112,18 @@ public class SarahContextBuilder {
         }
     }
 
+    @Transactional
+    public List<SarahContextItem> buildForResources(UUID cardId, List<UUID> resourceIds, UUID userId) {
+        lockAndAuthorizeCard(cardId, userId);
+        List<SarahContextItem> result = new ArrayList<>();
+        for (UUID id : resourceIds) {
+            requireContextualResource(cardId, id, userId);
+            Resource resource = resources.findById(id).orElseThrow();
+            result.add(new SarahContextItem("resource", id, resource.getTitle(), resource.getExtractedContent().toString()));
+        }
+        return List.copyOf(result);
+    }
+
     private boolean resourceBelongsToPersonalContext(UUID ownerCardId, UUID cardId, Card target, UUID userId) {
         if (!target.isShared()) return ownerCardId.equals(cardId) && target.isOwnedBy(userId);
         if (target.isOwnedBy(userId)) return ownerCardId.equals(cardId);

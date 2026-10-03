@@ -254,7 +254,7 @@ POST   /v1/artifacts/{artifactType}/{artifactId}/share       — into {cardId}
 DELETE /v1/artifacts/{artifactType}/{artifactId}/share/{cardId}   — owner unshare
 POST   /v1/artifacts/{artifactType}/{artifactId}/force-unshare/{cardId}
 ```
-- `artifactType` ∈ `resource | note | studyset | summary | quiz | flashcardset`.
+- `artifactType` ∈ `resource | note | studyset | quiz | flashcardset`; Summary is an approved future artifact concept but has no implementation or share endpoints yet (AD-081).
 - 🔒 AD-045: this is an **explicit share record**, not a same-row boolean
   — the API models it as its own relationship (share/unshare as distinct
   operations on a link), never as a field toggle on the artifact itself.
@@ -558,20 +558,17 @@ just an architecture pointer** (`SARAH_SECURITY_SPEC.md`):
 ```
 POST /v1/cards/{cardId}/sarah/generate
 ```
-- Request: `{ "artifactType": "summary|flashcardset|quiz|studyset", "sourceResourceIds": ["uuid", ...], "instructions": "string|null" }`.
-- 🔒 AD-035: all four types are in MVP scope.
+- Request: `{ "artifactType": "flashcardset|quiz|studyset", "sourceResourceIds": ["uuid", ...], "instructions": "string|null" }`.
+- 🔒 AD-035/081: FlashcardSet, Quiz, and StudySet generation are current B10 targets. Summary remains an approved first-class artifact and intended MVP generation target, but its concrete persistence, content, DTO, CRUD, and generation contracts are deferred under AD-081. No placeholder Summary response or endpoint is defined.
 - 🔒 AD-055 + AD-065: output is validated as a **complete whole before
   persistence** — if any required component fails validation, the entire
   attempt is rejected; there is no partial-success response shape.
-- Response `201` (success): the generated artifact, in the **exact same
-  shape** as its manually-created counterpart (AD-036) — no separate
-  "generated artifact" response type — plus a `provenance` field:
-  `{ "generatedBy": "SARAH", "sources": [{ "artifactType": "string", "artifactId": "uuid" }] }`.
+- Response `201` (success): `{ "artifactType": "flashcardset|quiz|studyset", "artifact": <the ordinary artifact response>, "provenance": { "generatedBy": "SARAH", "sources": [{ "artifactType": "resource", "artifactId": "uuid" }] }, "usageUsed": "int", "usageLimit": "int" }`. The `artifact` value uses the exact canonical response shape of its manually-created counterpart (AD-036); no separate persisted/generated artifact type is created.
   🔒 AD-059: this `provenance.sources` list is informational only —
   possessing a generated artifact never grants access to the sources it
   lists; those remain governed entirely by their own ownership/sharing
   state.
-- Response `422` (validation failure): `{ "error": { "code": "GENERATION_VALIDATION_FAILED", "message": "string" } }` — the client may retry; nothing partial was persisted.
+- Response `422` (validation failure): `{ "error": { "code": "GENERATION_VALIDATION_FAILED", "message": "string" } }` — the client may retry; nothing was persisted.
 
 ---
 

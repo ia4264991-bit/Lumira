@@ -738,6 +738,10 @@ closes the persistence-mechanism gap it explicitly left open.
 
 - **Revision note (2026-10-03)** — AD-080 additively defines the meaning and trust boundary of Sarah's API `conversationId` and `conversationHistory`. It does not introduce persisted conversation state or change AD-022/AD-027/AD-028/AD-037/AD-049/AD-050/AD-054/AD-056/AD-058.
 
+- **AD-081 (additive clarification, 2026-10-03 — Summary implementation boundary)** — AD-029 establishes Summary as a first-class artifact concept; AD-030 gives it one canonical identity regardless of human or Sarah creation; AD-035 includes Sarah-generated Summaries conceptually in MVP; and AD-036 requires any implemented Sarah-generated Summary to use the ordinary Summary artifact type. The repository does not define its persisted content schema, entity structure, CRUD representation, DTO, or complete API. Those concrete implementation contracts are deferred. No implementation may infer or invent them, and B10 must not persist generated Summaries until an explicit contract is adopted. B10 may proceed for artifact types whose domain, persistence, and API contracts are concrete. Once defined, Summary generation must follow AD-030/036. This additive boundary does not invalidate, remove, or rewrite AD-029/030/035/036.
+
+- **Revision note (2026-10-03)** — AD-081 resolves the current Summary implementation boundary without changing the historical meaning of AD-029/030/035/036. AD-076 is already assigned to the B5 Note/StudySet clarification; this decision uses the next unused identifier rather than replacing it.
+
 - **Revision note (2026-10-02)** — AD-066 and AD-067 add the previously
   unspecified transfer result and member-Card relationship without
   changing the historical wording of AD-042 or AD-033. AD-068 resolves
