@@ -18,6 +18,8 @@ public class ResourceShare extends BaseEntity {
     private UUID studySetId;
     @Column(name = "quiz_id", updatable = false)
     private UUID quizId;
+    @Column(name = "flashcard_set_id", updatable = false)
+    private UUID flashcardSetId;
     @Column(name = "card_id", nullable = false, updatable = false)
     private UUID cardId;
     @Column(name = "active", nullable = false)
@@ -35,6 +37,7 @@ public class ResourceShare extends BaseEntity {
             case NOTE -> noteId = artifactId;
             case STUDYSET -> studySetId = artifactId;
             case QUIZ -> quizId = artifactId;
+            case FLASHCARD_SET -> flashcardSetId = artifactId;
         }
         this.cardId = cardId;
         this.active = true;
@@ -43,13 +46,15 @@ public class ResourceShare extends BaseEntity {
     public UUID getNoteId() { return noteId; }
     public UUID getStudySetId() { return studySetId; }
     public UUID getQuizId() { return quizId; }
+    public UUID getFlashcardSetId() { return flashcardSetId; }
     public UUID getCardId() { return cardId; }
     public boolean isActive() { return active; }
     public ArtifactType getArtifactType() {
         if (resourceId != null) return ArtifactType.RESOURCE;
         if (noteId != null) return ArtifactType.NOTE;
         if (studySetId != null) return ArtifactType.STUDYSET;
-        return ArtifactType.QUIZ;
+        if (quizId != null) return ArtifactType.QUIZ;
+        return ArtifactType.FLASHCARD_SET;
     }
     public UUID getArtifactId() {
         return switch (getArtifactType()) {
@@ -57,6 +62,7 @@ public class ResourceShare extends BaseEntity {
             case NOTE -> noteId;
             case STUDYSET -> studySetId;
             case QUIZ -> quizId;
+            case FLASHCARD_SET -> flashcardSetId;
         };
     }
     public void activate() { active = true; }

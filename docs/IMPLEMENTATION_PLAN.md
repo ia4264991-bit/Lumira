@@ -196,12 +196,12 @@ MVP, do not silently pull forward:**
 - **Exit criteria**: Authorized Course Space members can attempt one shared canonical Quiz independently, while no attempt, answer, score, or answer key leaks to another user or shared reader.
 
 ### B7 — Flashcards
-- **Objective**: Flashcard Set artifact + personal progress boundary (AD-053).
-- **Scope**: `FlashcardSet` entity (canonical content); per-user flashcard progress/review-state entity, same boundary principle as B6's `QuizAttempt`.
+- **Objective**: Canonical ordered FlashcardSet content plus private per-user review progress (AD-053/078).
+- **Scope**: FlashcardSet artifact using AD-057 ownership and generic AD-045 sharing; ordered stable-ID cards with `front`/`back`; per-user/card latest outcome limited to `AGAIN`/`GOT_IT`. No scheduling, due dates, review counts, grading, or additional card types.
 - **Dependencies**: B1, B4, B6 (mirrors the same pattern — build B6 first to establish it once).
-- **Deliverables**: `FlashcardSet` + progress-state entities; endpoints.
-- **Tests/validation**: Same as B6 — personal progress never mutates or leaks across users.
-- **Exit criteria**: Same shape as B6's exit criteria, for Flashcards.
+- **Deliverables**: Flyway migration; FlashcardSet, Flashcard, and FlashcardProgress persistence; canonical create/list/get/update/delete; current-user progress recording/read endpoints; generic share lifecycle integration.
+- **Tests/validation**: PostgreSQL CRUD, owner/share authorization, card ordering and content replacement, IDOR protection, allowed outcome validation, same-card latest-result updates, and cross-user progress isolation.
+- **Exit criteria**: Authorized shared readers can study canonical cards and record private outcomes; no user's progress is visible or mutable by another user, and progress behavior contains no scheduling semantics.
 
 ### B8 — Events + Notifications
 - **Objective**: The single event-log model (AD-026) powering both the activity feed and notifications.

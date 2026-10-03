@@ -6,6 +6,8 @@ import com.lumira.backend.study.StudySet;
 import com.lumira.backend.study.StudySetRepository;
 import com.lumira.backend.quiz.Quiz;
 import com.lumira.backend.quiz.QuizRepository;
+import com.lumira.backend.flashcard.FlashcardSet;
+import com.lumira.backend.flashcard.FlashcardSetRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,14 +21,17 @@ public class ResourceShareService {
     private final NoteRepository notes;
     private final StudySetRepository studySets;
     private final QuizRepository quizzes;
+    private final FlashcardSetRepository flashcardSets;
 
     public ResourceShareService(ResourceRepository resources, ResourceShareRepository shares,
-            NoteRepository notes, StudySetRepository studySets, QuizRepository quizzes) {
+            NoteRepository notes, StudySetRepository studySets, QuizRepository quizzes,
+            FlashcardSetRepository flashcardSets) {
         this.resources = resources;
         this.shares = shares;
         this.notes = notes;
         this.studySets = studySets;
         this.quizzes = quizzes;
+        this.flashcardSets = flashcardSets;
     }
 
     /** AD-022: eligible artifacts become shared when the owning Card becomes a Course Space. */
@@ -37,6 +42,7 @@ public class ResourceShareService {
         for (Note note : notes.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId)) activate(ArtifactType.NOTE, note.getId(), cardId);
         for (StudySet set : studySets.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId)) activate(ArtifactType.STUDYSET, set.getId(), cardId);
         for (Quiz quiz : quizzes.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId)) activate(ArtifactType.QUIZ, quiz.getId(), cardId);
+        for (FlashcardSet set : flashcardSets.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId)) activate(ArtifactType.FLASHCARD_SET, set.getId(), cardId);
     }
 
     /** AD-063: dissolution revokes Course-Space visibility while retaining Resources. */
@@ -52,8 +58,11 @@ public class ResourceShareService {
             } else if (snapshot.getStudySetId() != null) {
                 shares.findStudySetShareForUpdate(snapshot.getStudySetId(), cardId)
                         .filter(ResourceShare::isActive).ifPresent(ResourceShare::deactivate);
-            } else {
+            } else if (snapshot.getQuizId() != null) {
                 shares.findQuizShareForUpdate(snapshot.getQuizId(), cardId)
+                        .filter(ResourceShare::isActive).ifPresent(ResourceShare::deactivate);
+            } else {
+                shares.findFlashcardSetShareForUpdate(snapshot.getFlashcardSetId(), cardId)
                         .filter(ResourceShare::isActive).ifPresent(ResourceShare::deactivate);
             }
         }
@@ -65,6 +74,7 @@ public class ResourceShareService {
             case NOTE -> shares.findNoteShareForUpdate(artifactId, cardId).orElse(null);
             case STUDYSET -> shares.findStudySetShareForUpdate(artifactId, cardId).orElse(null);
             case QUIZ -> shares.findQuizShareForUpdate(artifactId, cardId).orElse(null);
+            case FLASHCARD_SET -> shares.findFlashcardSetShareForUpdate(artifactId, cardId).orElse(null);
         };
         if (existing == null) shares.save(new ResourceShare(type, artifactId, cardId));
         else existing.activate();

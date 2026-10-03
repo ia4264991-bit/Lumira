@@ -331,6 +331,22 @@ User's attempts. Multiple attempts are independent. Full versioning,
 question banks, sections, timers, randomization, non-MCQ question types,
 and grading engines remain out of scope.
 
+**AD-078 (B7 Flashcards)** — `FlashcardSet` is one canonical AD-030
+artifact with the AD-057 owner pair, `title`, `description`, timestamps,
+and relational `Flashcard` rows. Each card has a stable UUID, `front`,
+`back`, and a unique positive position within its set; reads sort by
+position. A set's canonical content is shared only through the existing
+AD-045 artifact-share records. `FlashcardProgress` is separate from
+canonical content and is keyed by the reviewing User and card. It stores
+that user's most recent outcome (`AGAIN` or `GOT_IT`) and review timestamp;
+recording another outcome updates only that user's row. Progress is never
+included in canonical set responses or exposed to another user. Outcomes
+are recorded without scheduling, due dates, intervals, review counts,
+grading, additional card types, or other review behavior. Both canonical
+content access and review submission require live persisted set-read
+authorization under AD-045/056; progress reads are restricted to the
+current user.
+
 ---
 
 ## 15. Sarah

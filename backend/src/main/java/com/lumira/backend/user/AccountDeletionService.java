@@ -18,13 +18,16 @@ import com.lumira.backend.study.StudySetRepository;
 import com.lumira.backend.quiz.Quiz;
 import com.lumira.backend.quiz.QuizRepository;
 import com.lumira.backend.quiz.QuizAttemptRepository;
+import com.lumira.backend.flashcard.FlashcardSet;
+import com.lumira.backend.flashcard.FlashcardSetRepository;
+import com.lumira.backend.flashcard.FlashcardProgressRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
 
-/** Account deletion for the persisted B0-B4 model (AD-049 through AD-052/075). */
+/** Account deletion for persisted artifact models (AD-049 through AD-052/075). */
 @Service
 public class AccountDeletionService {
     private final UserRepository users;
@@ -37,12 +40,15 @@ public class AccountDeletionService {
     private final StudySetRepository studySets;
     private final QuizRepository quizzes;
     private final QuizAttemptRepository quizAttempts;
+    private final FlashcardSetRepository flashcardSets;
+    private final FlashcardProgressRepository flashcardProgress;
 
     public AccountDeletionService(UserRepository users, CardRepository cards,
             CardMembershipRepository memberships, CardJoinRequestRepository joinRequests,
             ResourceRepository resources, ResourceShareRepository shares,
             NoteRepository notes, StudySetRepository studySets, QuizRepository quizzes,
-            QuizAttemptRepository quizAttempts) {
+            QuizAttemptRepository quizAttempts, FlashcardSetRepository flashcardSets,
+            FlashcardProgressRepository flashcardProgress) {
         this.users = users;
         this.cards = cards;
         this.memberships = memberships;
@@ -53,6 +59,8 @@ public class AccountDeletionService {
         this.studySets = studySets;
         this.quizzes = quizzes;
         this.quizAttempts = quizAttempts;
+        this.flashcardSets = flashcardSets;
+        this.flashcardProgress = flashcardProgress;
     }
 
     @Transactional
@@ -77,6 +85,7 @@ public class AccountDeletionService {
         List<UUID> candidateNoteIds = notes.findIdsOwnedByUserOrCards(userId);
         List<UUID> candidateStudySetIds = studySets.findIdsOwnedByUserOrCards(userId);
         List<UUID> candidateQuizIds = quizzes.findIdsOwnedByUserOrCards(userId);
+        List<UUID> candidateFlashcardSetIds = flashcardSets.findIdsOwnedByUserOrCards(userId);
         List<ResourceShare> observedShares = new java.util.ArrayList<>();
         if (!candidateResourceIds.isEmpty()) {
             observedShares.addAll(shares
@@ -85,6 +94,7 @@ public class AccountDeletionService {
         if (!candidateNoteIds.isEmpty()) observedShares.addAll(shares.findByNoteIdInAndActiveTrueOrderByNoteIdAscCreatedAtAscIdAsc(candidateNoteIds));
         if (!candidateStudySetIds.isEmpty()) observedShares.addAll(shares.findByStudySetIdInAndActiveTrueOrderByStudySetIdAscCreatedAtAscIdAsc(candidateStudySetIds));
         if (!candidateQuizIds.isEmpty()) observedShares.addAll(shares.findByQuizIdInAndActiveTrueOrderByQuizIdAscCreatedAtAscIdAsc(candidateQuizIds));
+        if (!candidateFlashcardSetIds.isEmpty()) observedShares.addAll(shares.findByFlashcardSetIdInAndActiveTrueOrderByFlashcardSetIdAscCreatedAtAscIdAsc(candidateFlashcardSetIds));
         List<UUID> sharedCardIds = observedShares.stream().map(ResourceShare::getCardId).distinct().sorted().toList();
         if (!sharedCardIds.isEmpty()) cards.findByIdInForUpdateOrderById(sharedCardIds);
 
@@ -127,10 +137,17 @@ public class AccountDeletionService {
             if (successor == null) quizzes.delete(quiz);
             else { quiz.transferOwnershipToCard(successor.getId()); quizzes.save(quiz); }
         }
+        for (FlashcardSet set : flashcardSets.findOwnedByUserOrCardsForUpdate(userId)) {
+            List<ResourceShare> activeShares = shares.findByFlashcardSetIdAndActiveTrueOrderByCreatedAtAscIdAsc(set.getId());
+            Card successor = successorCard(activeShares);
+            if (successor == null) flashcardSets.delete(set);
+            else { set.transferOwnershipToCard(successor.getId()); flashcardSets.save(set); }
+        }
         resources.flush();
         notes.flush();
         studySets.flush();
         quizzes.flush();
+        flashcardSets.flush();
 
         List<UUID> ownedCardIds = ownedCards.stream().map(Card::getId).toList();
         joinRequests.deleteByRequestingUserId(userId);
@@ -138,6 +155,7 @@ public class AccountDeletionService {
         joinRequests.clearResolverUser(userId);
         memberships.deleteByUserId(userId);
         quizAttempts.deleteByUserId(userId);
+        flashcardProgress.deleteByUserId(userId);
         if (!ownedCardIds.isEmpty()) memberships.deleteByCardIdIn(ownedCardIds);
         cards.deleteAll(ownedCards);
         users.delete(user);

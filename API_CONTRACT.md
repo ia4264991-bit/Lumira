@@ -406,15 +406,53 @@ deleting a User removes their attempts.
 
 ---
 
-## Flashcards and Progress (AD-029, AD-030, AD-053)
+## Flashcards and Progress (AD-029, AD-030, AD-053, AD-078)
 
 ```
-POST /v1/cards/{cardId}/flashcard-sets
-GET  /v1/flashcard-sets/{setId}
-POST /v1/flashcard-sets/{setId}/progress
-GET  /v1/flashcard-sets/{setId}/progress/me
+POST   /v1/cards/{cardId}/flashcard-sets
+GET    /v1/cards/{cardId}/flashcard-sets
+GET    /v1/flashcard-sets/{setId}
+PATCH  /v1/flashcard-sets/{setId}
+DELETE /v1/flashcard-sets/{setId}
+POST   /v1/flashcard-sets/{setId}/progress
+GET    /v1/flashcard-sets/{setId}/progress/me
 ```
-- Same canonical-vs-personal-state pattern as Quizzes, above.
+
+A FlashcardSet is one canonical artifact with `title`, `description`, and
+an ordered `cards` array. Each card has a stable `id`, positive `position`,
+`front`, and `back`. Create and PATCH accept the complete card array;
+PATCH omission preserves the current array, while a supplied array replaces
+it. A supplied card ID must belong to the set and may occur only once;
+omitted IDs are generated. Positions must be unique positive integers;
+responses always sort cards by position. Front/back are required strings.
+Responses include owner IDs and timestamps, and never include personal
+progress. Set update/delete require persisted artifact ownership. Delete
+removes that set's cards, private progress, and generic share records
+transactionally and returns `204 No Content`. Sharing uses the existing
+`/v1/artifacts/flashcard_set/{setId}/share` and existing unshare/
+force-unshare operations.
+
+Create/list on a Card follow existing artifact write/read authorization.
+Set retrieval requires the actual artifact owner or live persisted
+authorization through an active generic artifact share and ACTIVE Course
+Space membership. Knowing a set or card UUID is not authorization.
+
+Progress is private to the authenticated user and scoped to a card in the
+specified set. POST body:
+
+```json
+{ "cardId": "uuid", "outcome": "AGAIN" }
+```
+
+Only `AGAIN` and `GOT_IT` are accepted. Recording an outcome stores or
+updates the caller's latest result for that card with a server timestamp;
+it does not calculate a schedule, due date, interval, score, or review
+count. A card must belong to the set and the caller must have current
+persisted set-read authorization. `GET .../progress/me` returns only the
+caller's card IDs, latest outcomes, and review timestamps. There is no API
+to read or change another user's progress. Review rows never change
+canonical FlashcardSet content; deleting a card or set removes progress
+for the deleted card(s).
 
 ---
 

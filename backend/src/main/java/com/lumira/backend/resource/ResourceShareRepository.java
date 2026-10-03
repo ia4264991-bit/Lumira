@@ -15,6 +15,7 @@ public interface ResourceShareRepository extends JpaRepository<ResourceShare, UU
     Optional<ResourceShare> findByNoteIdAndCardId(UUID noteId, UUID cardId);
     Optional<ResourceShare> findByStudySetIdAndCardId(UUID studySetId, UUID cardId);
     Optional<ResourceShare> findByQuizIdAndCardId(UUID quizId, UUID cardId);
+    Optional<ResourceShare> findByFlashcardSetIdAndCardId(UUID flashcardSetId, UUID cardId);
     boolean existsByResourceIdAndCardIdAndActiveTrue(UUID resourceId, UUID cardId);
     List<ResourceShare> findByCardIdAndActiveTrue(UUID cardId);
 
@@ -23,9 +24,11 @@ public interface ResourceShareRepository extends JpaRepository<ResourceShare, UU
     List<ResourceShare> findByNoteIdAndActiveTrueOrderByCreatedAtAscIdAsc(UUID noteId);
     List<ResourceShare> findByStudySetIdAndActiveTrueOrderByCreatedAtAscIdAsc(UUID studySetId);
     List<ResourceShare> findByQuizIdAndActiveTrueOrderByCreatedAtAscIdAsc(UUID quizId);
+    List<ResourceShare> findByFlashcardSetIdAndActiveTrueOrderByCreatedAtAscIdAsc(UUID flashcardSetId);
     List<ResourceShare> findByNoteIdInAndActiveTrueOrderByNoteIdAscCreatedAtAscIdAsc(List<UUID> noteIds);
     List<ResourceShare> findByStudySetIdInAndActiveTrueOrderByStudySetIdAscCreatedAtAscIdAsc(List<UUID> studySetIds);
     List<ResourceShare> findByQuizIdInAndActiveTrueOrderByQuizIdAscCreatedAtAscIdAsc(List<UUID> quizIds);
+    List<ResourceShare> findByFlashcardSetIdInAndActiveTrueOrderByFlashcardSetIdAscCreatedAtAscIdAsc(List<UUID> ids);
 
     List<ResourceShare> findByResourceIdAndActiveTrueOrderByCreatedAtAscIdAsc(UUID resourceId);
 
@@ -48,18 +51,24 @@ public interface ResourceShareRepository extends JpaRepository<ResourceShare, UU
     @Query("select s from ResourceShare s where s.quizId = :artifactId and s.cardId = :cardId")
     Optional<ResourceShare> findQuizShareForUpdate(@Param("artifactId") UUID artifactId, @Param("cardId") UUID cardId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from ResourceShare s where s.flashcardSetId = :artifactId and s.cardId = :cardId")
+    Optional<ResourceShare> findFlashcardSetShareForUpdate(@Param("artifactId") UUID artifactId, @Param("cardId") UUID cardId);
+
     @Query(value = "select * from artifact_share s where s.active = true and " +
             "((:type = 'resource' and s.resource_id = :artifactId) or " +
             "(:type = 'note' and s.note_id = :artifactId) or " +
             "(:type = 'studyset' and s.study_set_id = :artifactId) or " +
-            "(:type = 'quiz' and s.quiz_id = :artifactId)) order by s.created_at, s.id", nativeQuery = true)
+            "(:type = 'quiz' and s.quiz_id = :artifactId) or " +
+            "(:type = 'flashcard_set' and s.flashcard_set_id = :artifactId)) order by s.created_at, s.id", nativeQuery = true)
     List<ResourceShare> findActiveForArtifact(@Param("type") String type, @Param("artifactId") UUID artifactId);
 
     @Query(value = "select * from artifact_share s where s.card_id=:cardId and " +
             "((:type = 'resource' and s.resource_id=:artifactId) or " +
             "(:type = 'note' and s.note_id=:artifactId) or " +
             "(:type = 'studyset' and s.study_set_id=:artifactId) or " +
-            "(:type = 'quiz' and s.quiz_id=:artifactId))", nativeQuery = true)
+            "(:type = 'quiz' and s.quiz_id=:artifactId) or " +
+            "(:type = 'flashcard_set' and s.flashcard_set_id=:artifactId))", nativeQuery = true)
     Optional<ResourceShare> findForArtifactCard(@Param("type") String type,
             @Param("artifactId") UUID artifactId, @Param("cardId") UUID cardId);
 }
