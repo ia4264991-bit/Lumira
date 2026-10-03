@@ -9,17 +9,17 @@ correct without checking.
 
 ```
 CURRENT_PHASE: Backend Implementation
-CURRENT_MILESTONE: B5 - Notes + Study Sets
+CURRENT_MILESTONE: B6 - Quizzes
 STATUS: IN_PROGRESS
-LAST_COMPLETED_MILESTONE: B4 - Sharing + Authorization
-IN_PROGRESS: B5 - Notes + Study Sets
-NEXT_MILESTONE: B6 - Quizzes
+LAST_COMPLETED_MILESTONE: B5 - Notes + Study Sets
+IN_PROGRESS: B6 - Quizzes
+NEXT_MILESTONE: B7 - Flashcards
 BLOCKERS: None known for B0-B4.
-LAST_VALIDATED_COMMIT: 91afb90a7d48816ee329b5b3809d2ce9c0793cdd (B5 working-tree changes were also validated; they are not committed yet)
+LAST_VALIDATED_COMMIT: 4806efdff861e7a8eb009d58edb02abb3f413d73
 IMPLEMENTATION_COMMITS: B2 architecture clarification `7cddade`; ownership transfer `91eae6e`; transfer integration tests `82ecd3c`; B2 in-progress state `03ce622`; integrity-trigger migration and lifecycle assertion fix `b08dbb5`; B4 sharing and authorization `561c422fa294e792221fabe690e83498f3ea04b6`.
-LAST_VALIDATION: 2026-10-03 - User-run `mvn clean test -DforkCount=1 -DreuseForks=false` from the backend directory completed with BUILD SUCCESS against PostgreSQL: 60 tests run, 0 failures, 0 errors, 0 skipped. This validated the B5 working-tree changes based on HEAD `91afb90a7d48816ee329b5b3809d2ce9c0793cdd`; B5 changes remain uncommitted.
+LAST_VALIDATION: 2026-10-03 - User-run `mvn clean test -DforkCount=1 -DreuseForks=false` from the backend directory completed with BUILD SUCCESS against PostgreSQL: 60 tests run, 0 failures, 0 errors, 0 skipped. Validated B5 commit: `4806efdff861e7a8eb009d58edb02abb3f413d73`.
 ARCHITECTURE_BLOCKER: None known for B2-B5. AD-071 (2026-10-03) additively resolves the AD-066/AD-067 transfer/memberCardId conflict. AD-072 clarifies the physical owner column names without changing AD-057 semantics. AD-076 defines B5 Note/StudySet MVP content fields and CRUD semantics.
-NOTES: B2 is complete; its validation source is `b08dbb5`, and closure documentation is committed at `2f6a2c1`. B3 Resources is implemented, PostgreSQL-validated, committed, and pushed at `680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`; the user-run suite reported 42 tests with no failures or errors. Direct invitations use INVITED membership episodes per AD-070; do not introduce PENDING as a membership status. The V5 migration fixes the row-type access defect in the deferred V4 owner/member-Card integrity trigger. B3 introduces no ResourceVersion/ContentVersion or asynchronous processing infrastructure. B4 sharing and authorization were implemented, PostgreSQL-validated with 55 passing tests, and committed at `561c422fa294e792221fabe690e83498f3ea04b6`; B4 closure documentation is at `91afb90a7d48816ee329b5b3809d2ce9c0793cdd`. B5 is implemented under AD-076 and its user-run PostgreSQL suite passed with 60 tests and no failures, errors, or skips. B5 remains IN_PROGRESS until the validated changes and state update are committed.
+NOTES: B2 is complete; its validation source is `b08dbb5`, and closure documentation is committed at `2f6a2c1`. B3 Resources is implemented, PostgreSQL-validated, committed, and pushed at `680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`; the user-run suite reported 42 tests with no failures or errors. Direct invitations use INVITED membership episodes per AD-070; do not introduce PENDING as a membership status. The V5 migration fixes the row-type access defect in the deferred V4 owner/member-Card integrity trigger. B3 introduces no ResourceVersion/ContentVersion or asynchronous processing infrastructure. B4 sharing and authorization were implemented, PostgreSQL-validated with 55 passing tests, and committed at `561c422fa294e792221fabe690e83498f3ea04b6`; B4 closure documentation is at `91afb90a7d48816ee329b5b3809d2ce9c0793cdd`. B5 Notes + Study Sets are implemented under AD-076, PostgreSQL-validated with 60 passing tests, and committed at `4806efdff861e7a8eb009d58edb02abb3f413d73`. B6 Quizzes is now the active milestone.
 ```
 
 ---
@@ -54,7 +54,7 @@ it exists."**
 - [x] B2 — Course Spaces (`b08dbb53a634a626d4606ad244af7041d778e911`; 33/33 PostgreSQL integration tests)
 - [x] B3 — Resources (`680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`; 42/42 PostgreSQL integration tests)
 - [x] B4 — Sharing + Authorization (`561c422fa294e792221fabe690e83498f3ea04b6`; 55/55 PostgreSQL integration tests)
-- [ ] B5 — Notes + Study Sets
+- [x] B5 — Notes + Study Sets (`4806efdff861e7a8eb009d58edb02abb3f413d73`; 60/60 PostgreSQL integration tests)
 - [ ] B6 — Quizzes
 - [ ] B7 — Flashcards
 - [ ] B8 — Events + Notifications
