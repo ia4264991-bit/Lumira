@@ -15,7 +15,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DisplayName("B4 — Resource sharing and authorization")
+@DisplayName("B4 â€” Resource sharing and authorization")
 class ResourceSharingIntegrationTest extends BaseIntegrationTest {
     private UUID owner;
     private UUID admin;
@@ -27,7 +27,7 @@ class ResourceSharingIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void reset() {
-        jdbcTemplate.execute("TRUNCATE resource_share, resource, course_space_event, card_join_request, card_membership, card, app_user CASCADE");
+        jdbcTemplate.execute("TRUNCATE artifact_share, resource, course_space_event, card_join_request, card_membership, card, app_user CASCADE");
         owner = user("share-owner");
         admin = user("share-admin");
         member = user("share-member");
@@ -46,7 +46,7 @@ class ResourceSharingIntegrationTest extends BaseIntegrationTest {
     void shareAccessAndOrdinaryUnshare() {
         assertThat(share(owner, courseSpace).getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(share(owner, courseSpace).getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM resource_share WHERE resource_id=? AND card_id=?",
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM artifact_share WHERE resource_id=? AND card_id=?",
                 Integer.class, resource, courseSpace)).isEqualTo(1);
         assertThat(eventCount(courseSpace, "ARTIFACT_SHARED")).isEqualTo(1);
         assertThat(read(member).getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -138,7 +138,7 @@ class ResourceSharingIntegrationTest extends BaseIntegrationTest {
         jdbcTemplate.update("UPDATE card_membership SET status='LEFT' WHERE card_id=? AND user_id=?", courseSpace, member);
         assertThat(request(HttpMethod.GET, owner, "/v1/resources/" + contributedResource, null, byte[].class).getStatusCode())
                 .isEqualTo(HttpStatus.OK);
-        assertThat(jdbcTemplate.queryForObject("SELECT active FROM resource_share WHERE resource_id=? AND card_id=?",
+        assertThat(jdbcTemplate.queryForObject("SELECT active FROM artifact_share WHERE resource_id=? AND card_id=?",
                 Boolean.class, contributedResource, courseSpace)).isTrue();
         assertThat(jdbcTemplate.queryForObject("SELECT owner_user_id FROM resource WHERE id=?", UUID.class, contributedResource)).isEqualTo(member);
     }
@@ -168,7 +168,7 @@ class ResourceSharingIntegrationTest extends BaseIntegrationTest {
     }
 
     private boolean activeShare(UUID cardId) {
-        return jdbcTemplate.queryForObject("SELECT active FROM resource_share WHERE resource_id=? AND card_id=?", Boolean.class, resource, cardId);
+        return jdbcTemplate.queryForObject("SELECT active FROM artifact_share WHERE resource_id=? AND card_id=?", Boolean.class, resource, cardId);
     }
 
     private UUID user(String suffix) {

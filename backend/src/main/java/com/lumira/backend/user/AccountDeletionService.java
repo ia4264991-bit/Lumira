@@ -11,6 +11,10 @@ import com.lumira.backend.resource.Resource;
 import com.lumira.backend.resource.ResourceRepository;
 import com.lumira.backend.resource.ResourceShare;
 import com.lumira.backend.resource.ResourceShareRepository;
+import com.lumira.backend.study.Note;
+import com.lumira.backend.study.NoteRepository;
+import com.lumira.backend.study.StudySet;
+import com.lumira.backend.study.StudySetRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,16 +30,21 @@ public class AccountDeletionService {
     private final CardJoinRequestRepository joinRequests;
     private final ResourceRepository resources;
     private final ResourceShareRepository shares;
+    private final NoteRepository notes;
+    private final StudySetRepository studySets;
 
     public AccountDeletionService(UserRepository users, CardRepository cards,
             CardMembershipRepository memberships, CardJoinRequestRepository joinRequests,
-            ResourceRepository resources, ResourceShareRepository shares) {
+            ResourceRepository resources, ResourceShareRepository shares,
+            NoteRepository notes, StudySetRepository studySets) {
         this.users = users;
         this.cards = cards;
         this.memberships = memberships;
         this.joinRequests = joinRequests;
         this.resources = resources;
         this.shares = shares;
+        this.notes = notes;
+        this.studySets = studySets;
     }
 
     @Transactional
@@ -57,15 +66,17 @@ public class AccountDeletionService {
         // this snapshot is assembled; Card locks serialize force-unshare and
         // dissolution so a selected successor cannot disappear mid-transfer.
         List<UUID> candidateResourceIds = resources.findResourceIdsOwnedByUserOrTheirCards(userId);
+        List<UUID> candidateNoteIds = notes.findIdsOwnedByUserOrCards(userId);
+        List<UUID> candidateStudySetIds = studySets.findIdsOwnedByUserOrCards(userId);
+        List<ResourceShare> observedShares = new java.util.ArrayList<>();
         if (!candidateResourceIds.isEmpty()) {
-            List<ResourceShare> observedShares = shares
-                    .findByResourceIdInAndActiveTrueOrderByResourceIdAscCreatedAtAscIdAsc(candidateResourceIds);
-            List<UUID> sharedCardIds = observedShares.stream().map(ResourceShare::getCardId)
-                    .distinct().sorted().toList();
-            if (!sharedCardIds.isEmpty()) {
-                cards.findByIdInForUpdateOrderById(sharedCardIds);
-            }
+            observedShares.addAll(shares
+                    .findByResourceIdInAndActiveTrueOrderByResourceIdAscCreatedAtAscIdAsc(candidateResourceIds));
         }
+        if (!candidateNoteIds.isEmpty()) observedShares.addAll(shares.findByNoteIdInAndActiveTrueOrderByNoteIdAscCreatedAtAscIdAsc(candidateNoteIds));
+        if (!candidateStudySetIds.isEmpty()) observedShares.addAll(shares.findByStudySetIdInAndActiveTrueOrderByStudySetIdAscCreatedAtAscIdAsc(candidateStudySetIds));
+        List<UUID> sharedCardIds = observedShares.stream().map(ResourceShare::getCardId).distinct().sorted().toList();
+        if (!sharedCardIds.isEmpty()) cards.findByIdInForUpdateOrderById(sharedCardIds);
 
         // The locked Resource rows serialize this transaction with every
         // B4 share writer. The successor list below is fetched only after all
@@ -88,7 +99,21 @@ public class AccountDeletionService {
             resource.transferOwnershipToCard(successorCourseSpace.getId());
             resources.save(resource);
         }
+        for (Note note : notes.findOwnedByUserOrCardsForUpdate(userId)) {
+            List<ResourceShare> activeShares = shares.findByNoteIdAndActiveTrueOrderByCreatedAtAscIdAsc(note.getId());
+            Card successor = successorCard(activeShares);
+            if (successor == null) notes.delete(note);
+            else { note.transferOwnershipToCard(successor.getId()); notes.save(note); }
+        }
+        for (StudySet set : studySets.findOwnedByUserOrCardsForUpdate(userId)) {
+            List<ResourceShare> activeShares = shares.findByStudySetIdAndActiveTrueOrderByCreatedAtAscIdAsc(set.getId());
+            Card successor = successorCard(activeShares);
+            if (successor == null) studySets.delete(set);
+            else { set.transferOwnershipToCard(successor.getId()); studySets.save(set); }
+        }
         resources.flush();
+        notes.flush();
+        studySets.flush();
 
         List<UUID> ownedCardIds = ownedCards.stream().map(Card::getId).toList();
         joinRequests.deleteByRequestingUserId(userId);
@@ -98,5 +123,14 @@ public class AccountDeletionService {
         if (!ownedCardIds.isEmpty()) memberships.deleteByCardIdIn(ownedCardIds);
         cards.deleteAll(ownedCards);
         users.delete(user);
+    }
+
+    private Card successorCard(List<ResourceShare> activeShares) {
+        if (activeShares.isEmpty()) return null;
+        ResourceShare successorShare = activeShares.getFirst();
+        Card card = cards.findById(successorShare.getCardId())
+                .orElseThrow(() -> new ConflictException("Active artifact share references a missing Card"));
+        if (!card.isShared()) throw new ConflictException("Active artifact share references a Card that is not a Course Space");
+        return card;
     }
 }

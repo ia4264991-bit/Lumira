@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DisplayName("B4 — Account deletion and shared Resource ownership")
+@DisplayName("B4 â€” Account deletion and shared Resource ownership")
 class AccountDeletionIntegrationTest extends BaseIntegrationTest {
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private CourseSpaceService courseSpaceService;
@@ -38,7 +38,7 @@ class AccountDeletionIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void reset() {
-        jdbcTemplate.execute("TRUNCATE resource_share, resource, course_space_event, card_join_request, card_membership, card, app_user CASCADE");
+        jdbcTemplate.execute("TRUNCATE artifact_share, resource, course_space_event, card_join_request, card_membership, card, app_user CASCADE");
         deletingUser = user("delete-me");
         spaceOwner = user("space-owner");
         personalCard = card(deletingUser, "Personal", false);
@@ -120,7 +120,7 @@ class AccountDeletionIntegrationTest extends BaseIntegrationTest {
         assertThat(resourceExists(sharedResource)).isFalse();
         assertThat(cardExists(spaceThree)).isTrue();
         assertThat(jdbcTemplate.queryForObject("SELECT is_shared FROM card WHERE id=?", Boolean.class, spaceThree)).isFalse();
-        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM resource_share WHERE resource_id=? AND card_id=?", Integer.class,
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM artifact_share WHERE resource_id=? AND card_id=?", Integer.class,
                 sharedResource, spaceThree)).isZero();
         assertThat(userExists(deletingUser)).isFalse();
     }
@@ -139,9 +139,9 @@ class AccountDeletionIntegrationTest extends BaseIntegrationTest {
         share(sharedResource, spaceTwo, tieWinnerId, base.plusSeconds(5), true);
         share(sharedResource, spaceThree, tieLoserId, base.plusSeconds(5), true);
         // Equal timestamps select the lower immutable share ID, regardless of insertion order.
-        jdbcTemplate.update("UPDATE resource_share SET created_at=? WHERE id IN (?,?)", Timestamp.from(base.plusSeconds(5)), tieWinnerId, tieLoserId);
+        jdbcTemplate.update("UPDATE artifact_share SET created_at=? WHERE id IN (?,?)", Timestamp.from(base.plusSeconds(5)), tieWinnerId, tieLoserId);
         // Move the nominal oldest share after the tied pair so the tie-break is decisive.
-        jdbcTemplate.update("UPDATE resource_share SET created_at=? WHERE id=?", Timestamp.from(base.plusSeconds(10)), olderId);
+        jdbcTemplate.update("UPDATE artifact_share SET created_at=? WHERE id=?", Timestamp.from(base.plusSeconds(10)), olderId);
 
         assertThat(deleteAccount().getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertOwner(sharedResource, spaceTwo);
@@ -214,7 +214,7 @@ class AccountDeletionIntegrationTest extends BaseIntegrationTest {
     }
 
     private void share(UUID resourceId, UUID cardId, UUID shareId, Instant createdAt, boolean active) {
-        jdbcTemplate.update("INSERT INTO resource_share(id,resource_id,card_id,active,created_at) VALUES (?,?,?,?,?)",
+        jdbcTemplate.update("INSERT INTO artifact_share(id,resource_id,card_id,active,created_at) VALUES (?,?,?,?,?)",
                 shareId, resourceId, cardId, active, Timestamp.from(createdAt));
     }
 
@@ -247,6 +247,6 @@ class AccountDeletionIntegrationTest extends BaseIntegrationTest {
     private boolean resourceExists(UUID id) { return Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM resource WHERE id=?)", Boolean.class, id)); }
     private boolean cardExists(UUID id) { return Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM card WHERE id=?)", Boolean.class, id)); }
     private boolean userExists(UUID id) { return Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM app_user WHERE id=?)", Boolean.class, id)); }
-    private int activeShareCount(UUID resourceId) { return jdbcTemplate.queryForObject("SELECT count(*) FROM resource_share WHERE resource_id=? AND active", Integer.class, resourceId); }
-    private boolean shareIsActive(UUID resourceId, UUID cardId) { return jdbcTemplate.queryForObject("SELECT active FROM resource_share WHERE resource_id=? AND card_id=?", Boolean.class, resourceId, cardId); }
+    private int activeShareCount(UUID resourceId) { return jdbcTemplate.queryForObject("SELECT count(*) FROM artifact_share WHERE resource_id=? AND active", Integer.class, resourceId); }
+    private boolean shareIsActive(UUID resourceId, UUID cardId) { return jdbcTemplate.queryForObject("SELECT active FROM artifact_share WHERE resource_id=? AND card_id=?", Boolean.class, resourceId, cardId); }
 }

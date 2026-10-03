@@ -90,7 +90,8 @@ public class ResourceService {
             return resources.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId).stream()
                     .map(ResourceResponse::from).toList();
         }
-        return shares.findByCardIdAndActiveTrueOrderByResourceIdAsc(cardId).stream()
+        return shares.findByCardIdAndActiveTrueOrderByCreatedAtAsc(cardId).stream()
+                .filter(share -> share.getResourceId() != null)
                 .map(ResourceShare::getResourceId).map(resources::findById)
                 .flatMap(java.util.Optional::stream)
                 .sorted(java.util.Comparator.comparing(Resource::getCreatedAt).reversed())

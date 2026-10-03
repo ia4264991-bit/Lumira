@@ -29,7 +29,7 @@ import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@DisplayName("B3 — Resources")
+@DisplayName("B3 â€” Resources")
 class ResourceIntegrationTest extends BaseIntegrationTest {
     private UUID owner;
     private UUID other;
@@ -39,7 +39,7 @@ class ResourceIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void setup() {
-        jdbcTemplate.execute("TRUNCATE resource_share, resource, course_space_event, card_join_request, card_membership, card, app_user CASCADE");
+        jdbcTemplate.execute("TRUNCATE artifact_share, resource, course_space_event, card_join_request, card_membership, card, app_user CASCADE");
         owner = user("resource-owner@example.com");
         other = user("resource-other@example.com");
         card = card(owner, "Private resources", false);
@@ -162,7 +162,7 @@ class ResourceIntegrationTest extends BaseIntegrationTest {
         ResponseEntity<Map> uploaded = upload(card, admin, "shared.txt", "text/plain", "shared course notes");
         assertThat(uploaded.getBody().get("status")).isEqualTo("READY");
         UUID resourceId = UUID.fromString(uploaded.getBody().get("id").toString());
-        assertThat(jdbcTemplate.queryForObject("SELECT active FROM resource_share WHERE resource_id = ? AND card_id = ?", Boolean.class, resourceId, card)).isTrue();
+        assertThat(jdbcTemplate.queryForObject("SELECT active FROM artifact_share WHERE resource_id = ? AND card_id = ?", Boolean.class, resourceId, card)).isTrue();
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM course_space_event WHERE card_id = ? AND type = 'RESOURCE_ADDED'", Integer.class, card)).isEqualTo(2);
         ResourceResponse[] listed = restTemplate.exchange(url("/v1/cards/" + card + "/resources"), HttpMethod.GET,
                 new HttpEntity<>(auth(member)), ResourceResponse[].class).getBody();

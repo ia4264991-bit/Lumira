@@ -1,6 +1,6 @@
 # Lumira — Domain Model
 
-**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-072.**
+**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-076.**
 This document consolidates already-frozen decisions into one coherent
 domain specification — it does not decide anything new. Where a mechanism
 is genuinely unresolved in `DECISIONS.md`, it is marked as such here, not
@@ -102,12 +102,20 @@ types.
 | Type | Notes |
 |---|---|
 | `Resource` | See §7 for the ownership mechanism (AD-057, resolved). |
-| `Note` | Free-form; same ownership/sharing pattern as Resources. |
-| `StudySet` | Distinct first-class artifact (AD-029) — **not** a synonym for Card, **not** a replacement for Course Space. |
+| `Note` | Free-form textual `title` and `content`; same ownership/sharing pattern as Resources (AD-076). |
+| `StudySet` | Distinct first-class artifact (AD-029) — **not** a synonym for Card, **not** a replacement for Course Space. B5 fields are textual `title` and `description`; child/item content is deferred (AD-076). |
 | `Summary` | Same pattern. |
 | `Quiz` | Canonical content only — see §14 for the separate personal-attempt model. |
 | `FlashcardSet` | Canonical content only — see §14 for the separate personal-progress model. |
 | Sarah conversation | Per AD-022, subject to the *same* private/shared toggle as the artifact types above — see §12/§14 for the practical implications, since this has never actually been built or exercised. |
+
+**AD-076 — B5 content model:** `Note` stores textual `title` and `content`;
+`StudySet` stores textual `title` and `description`. Both have the shared
+AD-057 owner pair and `created_at`/`updated_at` timestamps. Notes remain
+free-form. StudySet child items, ordering, grading, nested content, and
+generation-specific structure are deferred. Both are single canonical
+artifact types and use explicit AD-045 share records; no share state is
+embedded in either artifact row.
 
 **AD-064 (file-format neutrality)** — Different underlying file formats
 (PDF, DOCX, PPTX, XLSX, CSV, TXT, image formats, and others a future
@@ -219,6 +227,13 @@ already used for Resources (AD-021/AD-025), generalized to every
 shareable artifact type. This is what makes "sharing survives departure"
 (§9/AD-040) and "force-unshare doesn't touch the artifact" (below)
 mechanically true rather than merely stated.
+
+The B3 Resource specialization is extended in B5 as one `artifact_share`
+table. Each row has `card_id`, `active`, and timestamps plus exactly one
+real artifact foreign key among `resource_id`, `note_id`, and `study_set_id`;
+partial unique indexes prevent duplicate artifact/Card relationships. This
+extends the existing share-record mechanism rather than adding per-type
+sharing tables or sharing fields to artifact rows.
 
 **AD-040** — Sharing survives the sharer's departure: continued visibility
 is governed by the Course Space's own share record, not by the sharer's

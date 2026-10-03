@@ -292,12 +292,37 @@ POST   /v1/artifacts/{artifactType}/{artifactId}/force-unshare/{cardId}
 POST /v1/cards/{cardId}/notes
 GET  /v1/cards/{cardId}/notes
 GET  /v1/notes/{noteId}
+PATCH /v1/notes/{noteId}
+DELETE /v1/notes/{noteId}
 ```
-(Identical shape/pattern for `/studysets/` and `/summaries/`.)
-- 🔒 AD-030: one entity type each — no `PersonalNote`/`CourseSpaceNote`
-  split anywhere in this contract. Sharing is via the generic
-  `/share`/`/force-unshare` endpoints above, applied with
-  `artifactType=note|studyset|summary`.
+
+Note create/update fields: `{ "title": "string", "content": "string" }`.
+PATCH fields are optional; omitted fields remain unchanged. Responses expose
+`id`, `ownerCardId`, `ownerUserId`, `title`, `content`, `createdAt`, and
+`updatedAt`. Delete returns `204 No Content`.
+
+```http
+POST   /v1/cards/{cardId}/studysets
+GET    /v1/cards/{cardId}/studysets
+GET    /v1/studysets/{studySetId}
+PATCH  /v1/studysets/{studySetId}
+DELETE /v1/studysets/{studySetId}
+```
+
+StudySet create/update fields: `{ "title": "string", "description": "string" }`.
+PATCH fields are optional; omitted fields remain unchanged. Responses expose
+`id`, `ownerCardId`, `ownerUserId`, `title`, `description`, `createdAt`, and
+`updatedAt`. Delete returns `204 No Content`. B5 has no typed child items.
+
+🔒 AD-030/076: one canonical entity per type, with no private/Course-Space
+forks and no additional Note structure or StudySet item schema. Create on a
+Card requires existing artifact-write authorization. Get/list allow the
+actual owner or an authorized ACTIVE member through an active share. Update
+and delete require persisted artifact ownership. Delete removes associated
+share records transactionally but does not change ownership/account-deletion
+semantics. Sharing reuses the generic `/share`/`/force-unshare` endpoints
+above with `artifactType=note|studyset`; it never adds sharing state to the
+artifact row. Summary endpoints remain future scope.
 
 ---
 

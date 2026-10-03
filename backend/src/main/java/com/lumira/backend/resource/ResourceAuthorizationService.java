@@ -6,6 +6,7 @@ import com.lumira.backend.card.CardMembershipRepository;
 import com.lumira.backend.card.CardRepository;
 import com.lumira.backend.card.MembershipRole;
 import com.lumira.backend.card.MembershipStatus;
+import com.lumira.backend.common.domain.ArtifactOwner;
 import com.lumira.backend.common.error.ForbiddenException;
 import com.lumira.backend.common.error.ResourceNotFoundException;
 import com.lumira.backend.user.UserRepository;
@@ -44,11 +45,25 @@ public class ResourceAuthorizationService {
     public Card requireCardUpload(UUID cardId, UUID actorId) {
         Card card = requireCardReadable(cardId, actorId);
         if (!card.isShared()) return card;
+        requireUploadRole(card, actorId);
+        return card;
+    }
+
+    public Card requireCardUploadForUpdate(UUID cardId, UUID actorId) {
+        requireExistingUser(actorId, "Card not found");
+        Card card = cards.findByIdForUpdate(cardId).orElseThrow(() -> new ResourceNotFoundException("Card not found"));
+        if (card.isOwnedBy(actorId) && !card.isShared()) return card;
+        if (!card.isShared() || (!card.isOwnedBy(actorId) && !memberships.existsByCardIdAndUserIdAndStatus(
+                cardId, actorId, MembershipStatus.ACTIVE))) throw new ResourceNotFoundException("Card not found");
+        requireUploadRole(card, actorId);
+        return card;
+    }
+
+    private void requireUploadRole(Card card, UUID actorId) {
         MembershipRole role = activeRole(card, actorId);
         if (role != MembershipRole.OWNER && role != MembershipRole.ADMIN) {
-            throw new ForbiddenException("Owner or active Admin role is required to upload a Course Space Resource");
+            throw new ForbiddenException("Owner or active Admin role is required to create content in a Course Space");
         }
-        return card;
     }
 
     public void requireActiveMember(Card card, UUID actorId) {
@@ -70,29 +85,39 @@ public class ResourceAuthorizationService {
     }
 
     public void requireResourceOwner(Resource resource, UUID actorId) {
-        requireExistingUser(actorId, "Resource not found");
-        if (isOwner(resource, actorId)) return;
-        throw new ResourceNotFoundException("Resource not found");
+        requireArtifactOwner(resource.getOwner(), "Resource not found", actorId);
     }
 
-    public void requireResourceReadable(Resource resource, UUID actorId) {
-        requireExistingUser(actorId, "Resource not found");
-        if (isOwner(resource, actorId)) return;
+    public void requireArtifactOwner(ArtifactOwner owner, String notFoundMessage, UUID actorId) {
+        requireExistingUser(actorId, notFoundMessage);
+        if (isOwner(owner, actorId)) return;
+        throw new ResourceNotFoundException(notFoundMessage);
+    }
 
-        for (ResourceShare share : shares.findByResourceIdAndActiveTrueOrderByCreatedAtAscIdAsc(resource.getId())) {
+    public void requireArtifactReadable(ArtifactOwner owner, ArtifactType type, UUID artifactId,
+            String notFoundMessage, UUID actorId) {
+        requireExistingUser(actorId, notFoundMessage);
+        if (isOwner(owner, actorId)) return;
+        for (ResourceShare share : shares.findActiveForArtifact(type.apiValue(), artifactId)) {
             Card card = cards.findByIdForAuthorization(share.getCardId()).orElse(null);
             if (card == null || !card.isShared()) continue;
             if (card.isOwnedBy(actorId) || memberships.existsByCardIdAndUserIdAndStatus(
                     card.getId(), actorId, MembershipStatus.ACTIVE)) return;
         }
-        throw new ResourceNotFoundException("Resource not found");
+        throw new ResourceNotFoundException(notFoundMessage);
+    }
+
+    public void requireResourceReadable(Resource resource, UUID actorId) {
+        requireArtifactReadable(resource.getOwner(), ArtifactType.RESOURCE, resource.getId(), "Resource not found", actorId);
     }
 
     public boolean isOwner(Resource resource, UUID actorId) {
-        if (resource.getOwner().isUserOwned()) {
-            return resource.getOwner().getOwningUserId().equals(actorId);
-        }
-        return cards.findByIdAndOwnerId(resource.getOwner().getOwningCardId(), actorId).isPresent();
+        return isOwner(resource.getOwner(), actorId);
+    }
+
+    public boolean isOwner(ArtifactOwner owner, UUID actorId) {
+        if (owner.isUserOwned()) return owner.getOwningUserId().equals(actorId);
+        return cards.findByIdAndOwnerId(owner.getOwningCardId(), actorId).isPresent();
     }
 
     private MembershipRole activeRole(Card card, UUID actorId) {

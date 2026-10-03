@@ -180,12 +180,12 @@ MVP, do not silently pull forward:**
 - **Exit criteria**: Every sharing/authorization invariant in AD-040/041/044/045/046/047/056/074/075 has a passing PostgreSQL-backed integration test, not just a code path.
 
 ### B5 — Notes + Study Sets
-- **Objective**: Two more first-class Card artifacts (AD-029).
-- **Scope**: `Note`, `StudySet` entities; ownership/sharing exactly per the AD-030 no-forking pattern (reuse the B4 share mechanism, don't build a parallel one).
+- **Objective**: Two more first-class Card artifacts (AD-029), with minimum content and CRUD clarified by AD-076.
+- **Scope**: `Note` (`title`, `content`) and `StudySet` (`title`, `description`) entities; exactly-one ownership per AD-057; create/list/get/partial update/delete per AD-076; ownership/sharing exactly per the AD-030 no-forking pattern (reuse the B4 share mechanism, don't build a parallel one).
 - **Dependencies**: B1, B4.
 - **Deliverables**: Two entities + migrations; CRUD endpoints; share/unshare wired through the existing B4 mechanism.
-- **Tests/validation**: No `PersonalNote`/`CourseSpaceNote` type-forking exists anywhere in the schema (AD-030).
-- **Exit criteria**: Notes and Study Sets behave identically to Resources with respect to ownership/sharing, using the same mechanism, not a copy of it.
+- **Tests/validation**: PostgreSQL CRUD, ownership integrity, IDOR and share lifecycle tests for both artifact types; no `PersonalNote`/`CourseSpaceNote` or `PersonalStudySet`/`CourseSpaceStudySet` type-forking or StudySet child-item schema exists (AD-030/076).
+- **Exit criteria**: Notes and Study Sets obey the same persisted authorization and explicit share-record rules as Resources, use the existing sharing mechanism, and satisfy AD-076 without adding unapproved content structure.
 
 ### B6 — Quizzes
 - **Objective**: Quiz artifact + the canonical-vs-personal-state boundary (AD-053).

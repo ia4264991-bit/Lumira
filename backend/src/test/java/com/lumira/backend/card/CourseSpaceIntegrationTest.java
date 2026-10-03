@@ -18,7 +18,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@DisplayName("B2 — Course Spaces")
+@DisplayName("B2 â€” Course Spaces")
 class CourseSpaceIntegrationTest extends BaseIntegrationTest {
 
     private UUID ownerId;
@@ -30,7 +30,7 @@ class CourseSpaceIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void createUsersAndClearDatabase() {
-        jdbcTemplate.execute("TRUNCATE resource_share, resource, course_space_event, card_join_request, card_membership, card, app_user CASCADE");
+        jdbcTemplate.execute("TRUNCATE artifact_share, resource, course_space_event, card_join_request, card_membership, card, app_user CASCADE");
         ownerId = addUser("owner");
         adminId = addUser("admin");
         memberId = addUser("member");

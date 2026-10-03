@@ -8,10 +8,14 @@ import jakarta.persistence.Table;
 import java.util.UUID;
 
 @Entity
-@Table(name = "resource_share")
+@Table(name = "artifact_share")
 public class ResourceShare extends BaseEntity {
-    @Column(name = "resource_id", nullable = false, updatable = false)
+    @Column(name = "resource_id", updatable = false)
     private UUID resourceId;
+    @Column(name = "note_id", updatable = false)
+    private UUID noteId;
+    @Column(name = "study_set_id", updatable = false)
+    private UUID studySetId;
     @Column(name = "card_id", nullable = false, updatable = false)
     private UUID cardId;
     @Column(name = "active", nullable = false)
@@ -23,9 +27,32 @@ public class ResourceShare extends BaseEntity {
         this.cardId = cardId;
         this.active = true;
     }
+    public ResourceShare(ArtifactType type, UUID artifactId, UUID cardId) {
+        switch (type) {
+            case RESOURCE -> resourceId = artifactId;
+            case NOTE -> noteId = artifactId;
+            case STUDYSET -> studySetId = artifactId;
+        }
+        this.cardId = cardId;
+        this.active = true;
+    }
     public UUID getResourceId() { return resourceId; }
+    public UUID getNoteId() { return noteId; }
+    public UUID getStudySetId() { return studySetId; }
     public UUID getCardId() { return cardId; }
     public boolean isActive() { return active; }
+    public ArtifactType getArtifactType() {
+        if (resourceId != null) return ArtifactType.RESOURCE;
+        if (noteId != null) return ArtifactType.NOTE;
+        return ArtifactType.STUDYSET;
+    }
+    public UUID getArtifactId() {
+        return switch (getArtifactType()) {
+            case RESOURCE -> resourceId;
+            case NOTE -> noteId;
+            case STUDYSET -> studySetId;
+        };
+    }
     public void activate() { active = true; }
     public void deactivate() { active = false; }
 }

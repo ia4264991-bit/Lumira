@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Validates:
  * <ul>
  *   <li>AD-048: a user may own multiple Cards (no one-primary-card limit)
- *   <li>AD-041/AD-056: Card ownership enforced — no cross-user access
+ *   <li>AD-041/AD-056: Card ownership enforced â€” no cross-user access
  *   <li>AD-019: POST /v1/cards and GET /v1/cards exist and are scoped per owner
  *   <li>Auth boundary: unauthenticated requests are rejected
  * </ul>
@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * a valid UUID in the Bearer token resolves to that UUID as the userId.
  * Users must exist in the {@code app_user} table before Cards can be attributed.
  */
-@DisplayName("B1 — Identity + Personal Cards")
+@DisplayName("B1 â€” Identity + Personal Cards")
 class CardIntegrationTest extends BaseIntegrationTest {
 
     private UUID userAId;
@@ -39,8 +39,8 @@ class CardIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void insertTestUsers() {
-        // Clean state — order matters due to FK card → user
-        jdbcTemplate.execute("TRUNCATE resource_share, resource, course_space_event, card_join_request, card_membership, card, app_user CASCADE");
+        // Clean state â€” order matters due to FK card â†’ user
+        jdbcTemplate.execute("TRUNCATE artifact_share, resource, course_space_event, card_join_request, card_membership, card, app_user CASCADE");
 
         userAId = UUID.randomUUID();
         userBId = UUID.randomUUID();

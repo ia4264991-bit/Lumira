@@ -27,32 +27,26 @@ public class ArtifactSharingController {
     public ResponseEntity<ResourceShareResponse> share(@PathVariable String artifactType,
             @PathVariable UUID artifactId, @Valid @RequestBody ShareResourceRequest request,
             @CurrentUser AuthenticatedUser user) {
-        requireResourceType(artifactType);
-        ResourceSharingService.ShareResult result = sharing.share(artifactId, request.cardId(), user.userId());
+        ArtifactType type = ArtifactType.fromApiValue(artifactType);
+        ResourceSharingService.ShareResult result = sharing.share(type, artifactId, request.cardId(), user.userId());
         return ResponseEntity.status(result.changed() ? HttpStatus.CREATED : HttpStatus.OK)
                 .body(ResourceShareResponse.from(result.share()));
     }
 
     @DeleteMapping("/v1/artifacts/{artifactType}/{artifactId}/share/{cardId}")
-    public ResourceResponse unshare(@PathVariable String artifactType, @PathVariable UUID artifactId,
+    public Object unshare(@PathVariable String artifactType, @PathVariable UUID artifactId,
             @PathVariable UUID cardId, @CurrentUser AuthenticatedUser user) {
-        requireResourceType(artifactType);
-        return ResourceResponse.from(sharing.unshare(artifactId, cardId, user.userId()));
+        ArtifactType type = ArtifactType.fromApiValue(artifactType);
+        return sharing.unshare(type, artifactId, cardId, user.userId());
     }
 
     @PostMapping("/v1/artifacts/{artifactType}/{artifactId}/force-unshare/{cardId}")
-    public ResourceResponse forceUnshare(@PathVariable String artifactType, @PathVariable UUID artifactId,
+    public Object forceUnshare(@PathVariable String artifactType, @PathVariable UUID artifactId,
             @PathVariable UUID cardId, @RequestBody(required = false) ForceUnshareRequest request,
             @CurrentUser AuthenticatedUser user) {
-        requireResourceType(artifactType);
+        ArtifactType type = ArtifactType.fromApiValue(artifactType);
         String reason = request == null ? null : request.reason();
         String note = request == null ? null : request.note();
-        return ResourceResponse.from(sharing.forceUnshare(artifactId, cardId, user.userId(), reason, note));
-    }
-
-    private void requireResourceType(String artifactType) {
-        if (!"resource".equals(artifactType)) {
-            throw new com.lumira.backend.common.error.ResourceNotFoundException("Artifact not found");
-        }
+        return sharing.forceUnshare(type, artifactId, cardId, user.userId(), reason, note);
     }
 }

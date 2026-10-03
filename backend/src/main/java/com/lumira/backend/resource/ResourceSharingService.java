@@ -7,9 +7,13 @@ import com.lumira.backend.card.CardRepository;
 import com.lumira.backend.card.CourseSpaceEvent;
 import com.lumira.backend.card.CourseSpaceEventRepository;
 import com.lumira.backend.card.MembershipRole;
-import com.lumira.backend.common.error.ConflictException;
+import com.lumira.backend.common.domain.ArtifactOwner;
 import com.lumira.backend.common.error.ResourceNotFoundException;
 import com.lumira.backend.common.error.ValidationException;
+import com.lumira.backend.study.Note;
+import com.lumira.backend.study.NoteRepository;
+import com.lumira.backend.study.StudySet;
+import com.lumira.backend.study.StudySetRepository;
 import com.lumira.backend.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Set;
 import java.util.UUID;
 
-/** AD-045 Resource share lifecycle, reusing the B3 ResourceShare records. */
+/** Shared AD-045 lifecycle for every artifact type currently in B0-B5. */
 @Service
 @Transactional
 public class ResourceSharingService {
@@ -25,6 +29,8 @@ public class ResourceSharingService {
             "COPYRIGHT", "PRIVACY", "SAFETY", "ABUSE", "MALICIOUS_CONTENT", "POLICY_VIOLATION", "OTHER");
 
     private final ResourceRepository resources;
+    private final NoteRepository notes;
+    private final StudySetRepository studySets;
     private final ResourceShareRepository shares;
     private final CardRepository cards;
     private final CourseSpaceEventRepository events;
@@ -32,10 +38,12 @@ public class ResourceSharingService {
     private final UserRepository users;
     private final ObjectMapper mapper;
 
-    public ResourceSharingService(ResourceRepository resources, ResourceShareRepository shares,
-            CardRepository cards, CourseSpaceEventRepository events,
+    public ResourceSharingService(ResourceRepository resources, NoteRepository notes, StudySetRepository studySets,
+            ResourceShareRepository shares, CardRepository cards, CourseSpaceEventRepository events,
             ResourceAuthorizationService authorization, UserRepository users, ObjectMapper mapper) {
         this.resources = resources;
+        this.notes = notes;
+        this.studySets = studySets;
         this.shares = shares;
         this.cards = cards;
         this.events = events;
@@ -44,37 +52,37 @@ public class ResourceSharingService {
         this.mapper = mapper;
     }
 
-    public ShareResult share(UUID resourceId, UUID cardId, UUID actorId) {
+    public ShareResult share(ArtifactType type, UUID artifactId, UUID cardId, UUID actorId) {
         lockActor(actorId);
         Card card = lockCourseSpace(cardId);
         authorization.requireActiveMember(card, actorId);
-        Resource resource = lockResource(resourceId);
-        authorization.requireResourceOwner(resource, actorId);
+        ArtifactOwner owner = lockArtifact(type, artifactId);
+        authorization.requireArtifactOwner(owner, "Artifact not found", actorId);
 
-        ResourceShare share = shares.findByResourceIdAndCardIdForUpdate(resourceId, cardId).orElse(null);
+        ResourceShare share = lockShare(type, artifactId, cardId).orElse(null);
         if (share != null && share.isActive()) return new ShareResult(share, false);
-        if (share == null) share = shares.save(new ResourceShare(resourceId, cardId));
+        if (share == null) share = shares.save(new ResourceShare(type, artifactId, cardId));
         else share.activate();
-        emit(card, "ARTIFACT_SHARED", actorId, resource, "SHARE", null, null);
+        emit(card, "ARTIFACT_SHARED", actorId, type, artifactId, owner, "SHARE", null, null);
         return new ShareResult(share, true);
     }
 
-    public Resource unshare(UUID resourceId, UUID cardId, UUID actorId) {
+    public Object unshare(ArtifactType type, UUID artifactId, UUID cardId, UUID actorId) {
         lockActor(actorId);
         Card card = cards.findByIdForUpdate(cardId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course Space not found"));
         if (!card.isShared()) throw new ResourceNotFoundException("Course Space not found");
-        Resource resource = lockResource(resourceId);
-        authorization.requireResourceOwner(resource, actorId);
-        ResourceShare share = shares.findByResourceIdAndCardIdForUpdate(resourceId, cardId)
+        ArtifactOwner owner = lockArtifact(type, artifactId);
+        authorization.requireArtifactOwner(owner, "Artifact not found", actorId);
+        ResourceShare share = lockShare(type, artifactId, cardId)
                 .filter(ResourceShare::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Active share not found"));
         share.deactivate();
-        emit(card, "CONTENT_UNSHARED", actorId, resource, "UNSHARE", null, null);
-        return resource;
+        emit(card, "CONTENT_UNSHARED", actorId, type, artifactId, owner, "UNSHARE", null, null);
+        return artifact(type, artifactId);
     }
 
-    public Resource forceUnshare(UUID resourceId, UUID cardId, UUID actorId,
+    public Object forceUnshare(ArtifactType type, UUID artifactId, UUID cardId, UUID actorId,
             String reason, String note) {
         lockActor(actorId);
         Card card = lockCourseSpace(cardId);
@@ -88,14 +96,24 @@ public class ResourceSharingService {
         if (note != null && note.length() > 2000) {
             throw new ValidationException("Moderation note must be 2000 characters or fewer");
         }
-
-        Resource resource = lockResource(resourceId);
-        ResourceShare share = shares.findByResourceIdAndCardIdForUpdate(resourceId, cardId)
+        ArtifactOwner owner = lockArtifact(type, artifactId);
+        ResourceShare share = lockShare(type, artifactId, cardId)
                 .filter(ResourceShare::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Active share not found"));
         share.deactivate();
-        emit(card, "CONTENT_FORCE_UNSHARED", actorId, resource, "FORCE_UNSHARE", reason, note);
-        return resource;
+        emit(card, "CONTENT_FORCE_UNSHARED", actorId, type, artifactId, owner, "FORCE_UNSHARE", reason, note);
+        return artifact(type, artifactId);
+    }
+
+    public void createCardShareIfShared(ArtifactType type, UUID artifactId, UUID cardId, UUID actorId) {
+        Card card = cards.findByIdForUpdate(cardId).orElse(null);
+        if (card == null || !card.isShared()) return;
+        ResourceShare share = lockShare(type, artifactId, cardId).orElse(null);
+        if (share != null && share.isActive()) return;
+        if (share == null) shares.save(new ResourceShare(type, artifactId, cardId));
+        else share.activate();
+        ArtifactOwner owner = lockArtifact(type, artifactId);
+        emit(card, "ARTIFACT_SHARED", actorId, type, artifactId, owner, "SHARE", null, null);
     }
 
     private Card lockCourseSpace(UUID cardId) {
@@ -106,32 +124,52 @@ public class ResourceSharingService {
     }
 
     private void lockActor(UUID actorId) {
-        if (users.findByIdForUpdate(actorId).isEmpty()) {
-            throw new ResourceNotFoundException("Account not found");
-        }
+        if (users.findByIdForUpdate(actorId).isEmpty()) throw new ResourceNotFoundException("Account not found");
     }
 
-    private Resource lockResource(UUID resourceId) {
-        return resources.findByIdForUpdate(resourceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Resource not found"));
+    private ArtifactOwner lockArtifact(ArtifactType type, UUID id) {
+        return switch (type) {
+            case RESOURCE -> resources.findByIdForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Artifact not found")).getOwner();
+            case NOTE -> notes.findByIdForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Artifact not found")).getOwner();
+            case STUDYSET -> studySets.findByIdForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Artifact not found")).getOwner();
+        };
     }
 
-    private void emit(Card card, String type, UUID actorId, Resource resource,
-            String operation, String reason, String note) {
-        ObjectNode payload = mapper.createObjectNode()
-                .put("artifactType", "resource")
-                .put("artifactId", resource.getId().toString())
-                .put("resourceId", resource.getId().toString())
-                .put("operation", operation);
-        UUID ownerUserId = resource.getOwner().isUserOwned()
-                ? resource.getOwner().getOwningUserId()
-                : cards.findById(resource.getOwner().getOwningCardId()).map(Card::getOwnerId).orElse(null);
+    private Object artifact(ArtifactType type, UUID id) {
+        return switch (type) {
+            case RESOURCE -> resources.findById(id).map(ResourceResponse::from).orElseThrow(() -> new ResourceNotFoundException("Artifact not found"));
+            case NOTE -> notes.findById(id).map(com.lumira.backend.study.NoteResponse::from).orElseThrow(() -> new ResourceNotFoundException("Artifact not found"));
+            case STUDYSET -> studySets.findById(id).map(com.lumira.backend.study.StudySetResponse::from).orElseThrow(() -> new ResourceNotFoundException("Artifact not found"));
+        };
+    }
+
+    private java.util.Optional<ResourceShare> lockShare(ArtifactType type, UUID artifactId, UUID cardId) {
+        return switch (type) {
+            case RESOURCE -> shares.findByResourceIdAndCardIdForUpdate(artifactId, cardId);
+            case NOTE -> shares.findNoteShareForUpdate(artifactId, cardId);
+            case STUDYSET -> shares.findStudySetShareForUpdate(artifactId, cardId);
+        };
+    }
+
+    private ObjectNode payload(ArtifactType type, UUID id, ArtifactOwner owner, String operation,
+            String reason, String note) {
+        ObjectNode payload = mapper.createObjectNode().put("artifactType", type.apiValue())
+                .put("artifactId", id.toString()).put("operation", operation);
+        if (type == ArtifactType.RESOURCE) payload.put("resourceId", id.toString());
+        UUID ownerUserId = owner.isUserOwned() ? owner.getOwningUserId()
+                : cards.findById(owner.getOwningCardId()).map(Card::getOwnerId).orElse(null);
         if (ownerUserId != null) payload.put("artifactOwnerUserId", ownerUserId.toString());
-        if (type.equals("CONTENT_FORCE_UNSHARED")) {
+        if (operation.equals("FORCE_UNSHARE")) {
             if (reason == null) payload.putNull("reason"); else payload.put("reason", reason);
             if (note == null || note.isBlank()) payload.putNull("note"); else payload.put("note", note.strip());
         }
-        events.save(new CourseSpaceEvent(card.getId(), type, actorId, payload));
+        return payload;
+    }
+
+    private void emit(Card card, String eventType, UUID actorId, ArtifactType type, UUID id,
+            ArtifactOwner owner, String operation, String reason, String note) {
+        events.save(new CourseSpaceEvent(card.getId(), eventType, actorId,
+                payload(type, id, owner, operation, reason, note)));
     }
 
     public record ShareResult(ResourceShare share, boolean changed) { }
