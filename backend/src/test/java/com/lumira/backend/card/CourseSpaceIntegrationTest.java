@@ -249,7 +249,9 @@ class CourseSpaceIntegrationTest extends BaseIntegrationTest {
         ResponseEntity<Map> rejoin = rest("POST", ownerId, "/v1/join/" + link.get("shareToken"), null);
         assertThat(rejoin.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(rejoin.getBody().get("id")).isEqualTo(formerOwnerCardId.toString());
-        assertThat(count("select count(*) from card where owner_id=?", ownerId)).isEqualTo(2);
+        // Transfer creates one replacement personal Card for the former Owner;
+        // rejoin must reuse it instead of creating a second Card.
+        assertThat(count("select count(*) from card where owner_id=?", ownerId)).isEqualTo(1);
         assertThat(count("select count(*) from card_membership where card_id=? and user_id=? and status='ACTIVE'",
                 cardId, ownerId)).isEqualTo(1);
         assertOwnerInvariant(memberId);
