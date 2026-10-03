@@ -30,7 +30,7 @@ class CourseSpaceIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void createUsersAndClearDatabase() {
-        jdbcTemplate.execute("TRUNCATE course_space_event, card_join_request, card_membership, card, app_user");
+        jdbcTemplate.execute("TRUNCATE resource_share, resource, course_space_event, card_join_request, card_membership, card, app_user CASCADE");
         ownerId = addUser("owner");
         adminId = addUser("admin");
         memberId = addUser("member");

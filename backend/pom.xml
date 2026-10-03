@@ -15,23 +15,17 @@
     <artifactId>lumira-backend</artifactId>
     <version>0.1.0-alpha</version>
     <name>lumira-backend</name>
-    <description>
-        Lumira platform backend. Vertical Slice 1 (LPTS Chapters 3 &amp; 4).
-        Step 2 of 7: PostgreSQL, Spring Data JPA, Flyway, and Docker Compose
-        (Postgres + pgAdmin) all wired up, plus all eleven module package
-        boundaries established. Still no entities, repositories, or
-        controllers beyond Step 1's health check.
-    </description>
+    <description>Lumira backend: identity, Cards, Course Spaces, and synchronous Resource processing.</description>
 
     <properties>
         <java.version>21</java.version>
+        <pdfbox.version>3.0.5</pdfbox.version>
+        <poi.version>5.4.1</poi.version>
+        <commons-csv.version>1.14.0</commons-csv.version>
+        <tess4j.version>5.13.0</tess4j.version>
     </properties>
 
-    <!--
-        Step 2 adds: spring-boot-starter-data-jpa, postgresql, and Flyway.
-        Step 1's dependencies (web, validation, lombok, test) are unchanged
-        below.
-    -->
+    <!-- Spring MVC, PostgreSQL/JPA, Flyway, and the MVP Resource parsers. -->
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -44,6 +38,31 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>${commons-csv.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>net.sourceforge.tess4j</groupId>
+            <artifactId>tess4j</artifactId>
+            <version>${tess4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.sejda.imageio</groupId>
+            <artifactId>webp-imageio</artifactId>
+            <version>0.1.6</version>
         </dependency>
 
         <dependency>

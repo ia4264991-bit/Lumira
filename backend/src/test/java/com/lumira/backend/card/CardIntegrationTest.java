@@ -40,7 +40,7 @@ class CardIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void insertTestUsers() {
         // Clean state — order matters due to FK card → user
-        jdbcTemplate.execute("TRUNCATE course_space_event, card_join_request, card_membership, card, app_user");
+        jdbcTemplate.execute("TRUNCATE resource_share, resource, course_space_event, card_join_request, card_membership, card, app_user CASCADE");
 
         userAId = UUID.randomUUID();
         userBId = UUID.randomUUID();

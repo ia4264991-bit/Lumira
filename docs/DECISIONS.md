@@ -687,6 +687,8 @@ closes the persistence-mechanism gap it explicitly left open.
 
 - **AD-071 (additive clarification to AD-066/AD-067 — member Card links during ownership transfer, 2026-10-03)** — Ownership transfer updates the existing ACTIVE membership episodes in place as AD-066 specifies. Because AD-067 requires every `memberCardId` to reference a Card owned by that membership's `userId`, the new Owner's membership `memberCardId` is set to the Course Space Card's own `cardId`. The new Owner's former personal member Card remains an ordinary Card owned by them, but is no longer referenced by that membership episode. The former Owner becomes ADMIN and remains ACTIVE; in the same transaction, the system creates a new personal Card for the former Owner, owned by them and initialized with the Course Space Card's current name and color, then sets the former Owner membership's `memberCardId` to that Card. The former Owner's previous member Card was the shared Course Space Card and cannot be recovered from membership history because AD-066 changes roles in place; do not infer or reconstruct a historical link. This operation creates no identity and changes no Card ownership other than the Course Space Card's transfer to the target. All updates and the `OWNERSHIP_TRANSFERRED` event are atomic. This closes the AD-066/AD-067 integrity gap while retaining the owner/member-Card invariant enforced by the V4 deferred constraint trigger.
 
+- **AD-072 (additive physical-column clarification to AD-057, 2026-10-03)** — The shared artifact-owner mapping keeps AD-057's two real nullable foreign keys plus exactly-one CHECK, but its concrete SQL column names are `owner_card_id` and `owner_user_id`. This follows the B3 Resource requirement and does not change ownership semantics, FK targets, cardinality, or the uniform shared JPA mapping. The earlier AD-057 example names are retained as historical decision text; implementations and current schema use these snake_case column names.
+
 - **Revision note (2026-10-03)** — AD-071 closes the ownership-transfer
   member-Card integrity gap additively; historical wording in AD-066 and
   AD-067 remains unchanged.
@@ -755,6 +757,8 @@ of the previous three passes did.
 
 - 2026-10-03 — AD-071 additively closes the member-Card linkage gap during
   transfer without changing AD-066 or AD-067's historical wording.
+- 2026-10-03 — AD-072 additively clarifies physical ownership column names
+  for the shared mapping; AD-057's historical example and semantics remain.
 
 - 2026-09-12 — AD-019 through AD-028 added: first formal architecture pass
   for the Card/Course Space/Sarah model, following the retirement of the

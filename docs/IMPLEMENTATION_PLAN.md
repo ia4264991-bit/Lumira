@@ -22,7 +22,7 @@ alongside this cleanup; see its own banner for current status) →
 order only).
 
 **This plan does not decide architecture.** Every milestone below is
-scoped to what AD-001–AD-071 already permit (AD-001–018 retired/
+scoped to what AD-001–AD-072 already permit (AD-001–018 retired/
 historical; AD-019 onward live — see `docs/DECISIONS.md`'s own banners).
 If a milestone turns out to need a decision that isn't in `DECISIONS.md`,
 that is not this document's job to invent.
@@ -143,9 +143,9 @@ MVP, do not silently pull forward:**
 - **Exit criteria**: Sharing, membership, join/rejoin, link rotation, removal/leave, and transfer behave as specified by AD-019, AD-023/024/025, AD-031/032/033/034, AD-042/043, AD-060/061/062/066/067/068/069/070/071 and the API contract. `card` remains the sole workspace entity.
 ### B3 — Resources
 - **Objective**: The `Resource` entity and its processing lifecycle, per AD-021/AD-057 and `docs/RESOURCE_FILE_PROCESSING_SPEC.md`. *(Not a generalized versioning system — no `ResourceVersion`/`ContentVersion` entity is implied or required; see the note below.)*
-- **Scope**: Resource entity, ownership (two nullable FKs + CHECK per AD-057, resolving AD-021's mechanism gap — `owningCardId`/`owningUserId`, uniform across all artifact types); the persisted processing-lifecycle state (`UPLOADED/PROCESSING/READY/FAILED`, per the File Processing spec) as real columns on the `Resource` row itself, not a separate versioned-history table; access control tied to Card/Course Space ownership.
+- **Scope**: Resource entity, ownership (`owner_card_id`/`owner_user_id`, two nullable FKs + CHECK per AD-057/072, resolving AD-021's mechanism gap and uniform across all artifact types); the persisted processing-lifecycle state (`UPLOADED/PROCESSING/READY/FAILED`, per the File Processing spec) as real columns on the `Resource` row itself, not a separate versioned-history table; access control tied to Card/Course Space ownership and active share records.
 - **Dependencies**: B1, B2 (for Course-Space-scoped resources). **Additionally gated on `docs/RESOURCE_FILE_PROCESSING_SPEC.md`** — see below.
-- **Deliverables**: `Resource` entity + migration (including the lifecycle-status column); upload endpoint that runs extraction **synchronously, in-process, for MVP** — no queue, no worker, no outbox; ownership enforcement.
+- **Deliverables**: `Resource` entity + Flyway migration (including the owner XOR check, current extracted representation, original bytes, live Course Space share record, and lifecycle-status column); upload/list/download/reprocess API with extraction **synchronously, in-process, for MVP** — no queue, no worker, no outbox; live ownership and membership enforcement.
 - **Tests/validation**: A private Resource is inaccessible to non-owners; a Course-Space Resource is accessible only to authorized members; the CHECK constraint rejects both/neither owner column set; the lifecycle status column correctly reflects `READY`/`FAILED` after synchronous processing completes.
 - **Exit criteria**: A user can add a Resource to their own Card.
 
@@ -451,6 +451,7 @@ I1 (ongoing, paired) → I2 (needs everything) → I3 → I4 → I5
 |---|---|
 | AD-019, 048 | B1, B2 |
 | AD-021, 025, 030, 031, 033, 057, 060, 064 | B1–B5 |
+| AD-072 | B3 |
 | AD-067 | B2 |
 | AD-023, 032, 034, 042, 043, 061, 066, 068 | B2 |
 | AD-024, 062, 069 | B2 |

@@ -32,9 +32,18 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: false
 
+  servlet:
+    multipart:
+      max-file-size: ${LUMIRA_MULTIPART_MAX_FILE_SIZE:22MB}
+      max-request-size: ${LUMIRA_MULTIPART_MAX_REQUEST_SIZE:23MB}
+
 server:
   port: 8080
 
-# No entities exist yet (Step 3), so there is nothing for Hibernate to
-# validate against yet either — that's expected and not an error; the point
-# of this step is proving the datasource connects and Flyway runs.
+lumira:
+  resource:
+    max-upload-bytes: ${LUMIRA_RESOURCE_MAX_UPLOAD_BYTES:20971520}
+    max-pdf-pages: ${LUMIRA_RESOURCE_MAX_PDF_PAGES:500}
+
+# Hibernate validates the mapped B0-B3 entities against the Flyway-owned
+# schema; schema changes must be introduced through a new migration.

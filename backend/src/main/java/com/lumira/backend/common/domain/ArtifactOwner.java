@@ -16,10 +16,10 @@ import java.util.UUID;
 @Embeddable
 public class ArtifactOwner implements Serializable {
 
-    @Column(name = "owning_card_id")
+    @Column(name = "owner_card_id")
     private UUID owningCardId;
 
-    @Column(name = "owning_user_id")
+    @Column(name = "owner_user_id")
     private UUID owningUserId;
 
     public ArtifactOwner() {

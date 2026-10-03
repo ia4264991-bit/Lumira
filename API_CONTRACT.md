@@ -1,6 +1,6 @@
 # Lumira API Contract
 
-**Status: LIVE, rebuilt 2026-09-12 and extended through 2026-10-03** from `docs/DECISIONS.md` (AD-019–071),
+**Status: LIVE, rebuilt 2026-09-12 and extended through 2026-10-03** from `docs/DECISIONS.md` (AD-019–072),
 `docs/DOMAIN_MODEL.md`, `docs/RESOURCE_FILE_PROCESSING_SPEC.md`,
 `docs/SARAH_SECURITY_SPEC.md`, and `docs/IMPLEMENTATION_PLAN.md`. This
 supersedes the prior retired/historical version of this file (its content
@@ -199,7 +199,7 @@ DELETE /v1/cards/{cardId}/share
 - Current Owner only. Sets `isShared=false` and deactivates all active share records for this Course Space. It never deletes artifacts, changes ownership, or touches member-private content. Historical events remain.
 
 ---
-## Resources (AD-021, AD-057, `RESOURCE_FILE_PROCESSING_SPEC.md`)
+## Resources (AD-021, AD-057, AD-072, `RESOURCE_FILE_PROCESSING_SPEC.md`)
 
 ```
 POST /v1/cards/{cardId}/resources
@@ -211,7 +211,7 @@ POST /v1/cards/{cardId}/resources
 - 🔒 Processing executes **synchronously, in-process, for MVP** — no
   queue/worker. The response is only returned once processing reaches
   `READY` or `FAILED` (`RESOURCE_FILE_PROCESSING_SPEC.md` §4).
-- Response `201`: `{ "id": "uuid", "ownerCardId": "uuid" (nullable), "ownerUserId": "uuid" (nullable), "title": "string", "mimeType": "string", "status": "READY|FAILED", "failureReason": "string|null", "createdAt": "ISO-8601" }`.
+- Response `201`: `{ "id": "uuid", "ownerCardId": "uuid" (nullable), "ownerUserId": "uuid" (nullable), "title": "string", "originalFilename": "string", "mimeType": "string", "fileSizeBytes": "integer", "status": "READY|FAILED", "failureReason": "string|null", "extractedContent": "structured chunks with location metadata", "imageMetadata": "object", "createdAt": "ISO-8601" }`.
 - 🔒 AD-057: exactly one of `ownerCardId`/`ownerUserId` is non-null — the
   API surface reflects this directly rather than hiding it behind a
   single `ownerId`.
@@ -223,14 +223,25 @@ POST /v1/cards/{cardId}/resources
 GET /v1/cards/{cardId}/resources
 GET /v1/resources/{resourceId}
 ```
-- Authorization: same as upload — private-Card-owner, or authorized
-  Course-Space member for a shared Resource (AD-045's share record
-  governs the latter, checked live per AD-056).
+- Authorization: private-Card owner, or any `ACTIVE` Course-Space member
+  for a Resource with an active AD-045 share record. Course-Space upload
+  rights (Owner/Admin) do not restrict read access for other active
+  members. Both the share record and membership are checked live per
+  AD-056. Direct User-owned Resources are readable by that User only.
+- `GET /v1/cards/{cardId}/resources` returns the Resource metadata and
+  current extracted representation using the upload response shape.
+- `GET /v1/resources/{resourceId}` streams the original bytes with the
+  supported stored MIME type inline for READY display formats, otherwise
+  as a download with `application/octet-stream` and `nosniff`. It does not return extracted
+  text as authority; its access check uses the live Resource owner, active
+  Resource share record, Card sharing state, and ACTIVE membership.
 
 ```
 POST /v1/resources/{resourceId}/reprocess
 ```
 - Authorization: owner of the Resource's owning Card/User.
+- Response `200`: the upload response shape with the same Resource ID and
+  current extracted representation.
 - 🔒 Per `RESOURCE_FILE_PROCESSING_SPEC.md` §4: reprocessing runs against
   the **same** Resource row (idempotent), never creates a duplicate.
 

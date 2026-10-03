@@ -1,6 +1,6 @@
 # Lumira — Domain Model
 
-**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-071.**
+**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-072.**
 This document consolidates already-frozen decisions into one coherent
 domain specification — it does not decide anything new. Where a mechanism
 is genuinely unresolved in `DECISIONS.md`, it is marked as such here, not
@@ -131,9 +131,9 @@ every artifact type in AD-030's scope (Resource, Note, StudySet, Summary,
 Quiz, FlashcardSet):
 
 ```sql
-owningCardId UUID NULL REFERENCES card(id),
-owningUserId UUID NULL REFERENCES app_user(id),
-CHECK (num_nonnulls(owningCardId, owningUserId) = 1)
+owner_card_id UUID NULL REFERENCES card(id),
+owner_user_id UUID NULL REFERENCES app_user(id),
+CHECK (num_nonnulls(owner_card_id, owner_user_id) = 1)
 ```
 
 Two nullable foreign keys plus a database CHECK constraint — never a
@@ -151,6 +151,9 @@ This mechanism keeps AD-050's account-deletion reassignment a trivial
 single-column `UPDATE`, keeps AD-045's share records entirely orthogonal
 to whichever owner column is set, and satisfies AD-030's requirement that
 ownership live on the artifact's own table, never a separate one.
+
+**AD-072 physical-name clarification:** these SQL columns use `owner_card_id`
+and `owner_user_id`; AD-057's earlier camel-case example remains historical.
 
 ---
 

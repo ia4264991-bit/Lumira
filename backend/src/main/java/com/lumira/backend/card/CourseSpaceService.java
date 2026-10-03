@@ -5,6 +5,7 @@ import com.lumira.backend.common.error.ConflictException;
 import com.lumira.backend.common.error.ForbiddenException;
 import com.lumira.backend.common.error.GoneException;
 import com.lumira.backend.common.error.ResourceNotFoundException;
+import com.lumira.backend.resource.ResourceShareService;
 import com.lumira.backend.user.UserRepository;
 import jakarta.persistence.EntityManager;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +34,7 @@ public class CourseSpaceService {
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
     private final EntityManager entityManager;
+    private final ResourceShareService resourceShareService;
     private final String inviteBaseUrl;
 
     public CourseSpaceService(CardRepository cardRepository,
@@ -42,6 +44,7 @@ public class CourseSpaceService {
                               UserRepository userRepository,
                               ObjectMapper objectMapper,
                               EntityManager entityManager,
+                              ResourceShareService resourceShareService,
                               @Value("${lumira.invite.base-url:https://lumira.app}") String inviteBaseUrl) {
         this.cardRepository = cardRepository;
         this.membershipRepository = membershipRepository;
@@ -50,6 +53,7 @@ public class CourseSpaceService {
         this.userRepository = userRepository;
         this.objectMapper = objectMapper;
         this.entityManager = entityManager;
+        this.resourceShareService = resourceShareService;
         this.inviteBaseUrl = inviteBaseUrl.replaceAll("/+$", "");
     }
 
@@ -81,6 +85,7 @@ public class CourseSpaceService {
         requireOwner(card, actorId);
         if (!card.isShared()) {
             card.setShared(true);
+            resourceShareService.activateAllForCard(card.getId());
             CardMembership ownerMembership = membershipRepository.findFirstByCardIdAndUserIdAndStatusIn(
                     card.getId(), actorId, List.of(MembershipStatus.ACTIVE)).orElse(null);
             if (ownerMembership == null) {
@@ -376,6 +381,7 @@ public class CourseSpaceService {
         Card card = lockCard(cardId);
         requireOwner(card, actorId);
         requireShared(card);
+        resourceShareService.deactivateAllForCard(cardId);
         card.setShared(false);
         emit(cardId, "COURSE_SPACE_DISSOLVED", actorId, Map.of());
         return card;
