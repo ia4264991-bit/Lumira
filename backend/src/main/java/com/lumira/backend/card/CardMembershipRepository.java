@@ -24,6 +24,12 @@ public interface CardMembershipRepository extends JpaRepository<CardMembership, 
                                                    @Param("userId") UUID userId,
                                                    @Param("statuses") List<MembershipStatus> statuses);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from CardMembership m where m.cardId = :cardId and m.userId = :userId and m.status = :status")
+    Optional<CardMembership> findByCardIdAndUserIdAndStatusForUpdate(@Param("cardId") UUID cardId,
+                                                                      @Param("userId") UUID userId,
+                                                                      @Param("status") MembershipStatus status);
+
     List<CardMembership> findByCardIdOrderByCreatedAtAsc(UUID cardId);
 
     List<CardMembership> findByCardIdAndStatusOrderByCreatedAtAsc(UUID cardId, MembershipStatus status);

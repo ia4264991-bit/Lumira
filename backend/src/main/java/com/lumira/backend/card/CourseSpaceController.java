@@ -71,6 +71,13 @@ public class CourseSpaceController {
         return CardMembershipResponse.from(courseSpaceService.demote(cardId, userId, user.userId()));
     }
 
+    @PostMapping("/transfer-ownership")
+    public CardMembershipResponse transferOwnership(@PathVariable UUID cardId,
+            @Valid @RequestBody TransferOwnershipRequest request, @CurrentUser AuthenticatedUser user) {
+        return CardMembershipResponse.from(courseSpaceService.transferOwnership(
+                cardId, request.targetUserId(), user.userId()));
+    }
+
     @DeleteMapping("/members/{userId}")
     public CardMembershipResponse remove(@PathVariable UUID cardId, @PathVariable UUID userId,
                                           @CurrentUser AuthenticatedUser user) {

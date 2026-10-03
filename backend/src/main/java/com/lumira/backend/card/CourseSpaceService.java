@@ -6,6 +6,7 @@ import com.lumira.backend.common.error.ForbiddenException;
 import com.lumira.backend.common.error.GoneException;
 import com.lumira.backend.common.error.ResourceNotFoundException;
 import com.lumira.backend.user.UserRepository;
+import jakarta.persistence.EntityManager;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +32,7 @@ public class CourseSpaceService {
     private final CourseSpaceEventRepository eventRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final EntityManager entityManager;
     private final String inviteBaseUrl;
 
     public CourseSpaceService(CardRepository cardRepository,
@@ -39,6 +41,7 @@ public class CourseSpaceService {
                               CourseSpaceEventRepository eventRepository,
                               UserRepository userRepository,
                               ObjectMapper objectMapper,
+                              EntityManager entityManager,
                               @Value("${lumira.invite.base-url:https://lumira.app}") String inviteBaseUrl) {
         this.cardRepository = cardRepository;
         this.membershipRepository = membershipRepository;
@@ -46,6 +49,7 @@ public class CourseSpaceService {
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
         this.objectMapper = objectMapper;
+        this.entityManager = entityManager;
         this.inviteBaseUrl = inviteBaseUrl.replaceAll("/+$", "");
     }
 
@@ -306,6 +310,43 @@ public class CourseSpaceService {
         catch (IllegalStateException ex) { throw new ConflictException(ex.getMessage()); }
         emit(cardId, "MEMBER_DEMOTED", actorId, Map.of("userId", targetUserId));
         return target;
+    }
+
+    public CardMembership transferOwnership(UUID cardId, UUID targetUserId, UUID actorId) {
+        Card card = lockCard(cardId);
+        requireOwner(card, actorId);
+        requireShared(card);
+        if (actorId.equals(targetUserId)) {
+            throw new ConflictException("Owner cannot transfer ownership to themselves");
+        }
+
+        CardMembership formerOwner = membershipRepository.findByCardIdAndUserIdAndStatusForUpdate(
+                        cardId, actorId, MembershipStatus.ACTIVE)
+                .orElseThrow(() -> new ConflictException("Current Owner membership is missing"));
+        if (formerOwner.getRole() != MembershipRole.OWNER || !formerOwner.getMemberCardId().equals(cardId)) {
+            throw new ConflictException("Current Owner membership is inconsistent");
+        }
+
+        CardMembership newOwner = membershipRepository.findByCardIdAndUserIdAndStatusForUpdate(
+                        cardId, targetUserId, MembershipStatus.ACTIVE)
+                .orElseThrow(() -> new ConflictException("Ownership target must be an active member"));
+        if (newOwner.getRole() == MembershipRole.OWNER) {
+            throw new ConflictException("Ownership target is already the Owner");
+        }
+
+        Card formerOwnerCard = cardRepository.save(new Card(actorId, card.getName(), card.getColor()));
+        formerOwner.setRole(MembershipRole.ADMIN);
+        formerOwner.setMemberCardId(formerOwnerCard.getId());
+        // Release the partial unique ACTIVE OWNER index before assigning the role to the target.
+        // V4's deferred constraint trigger checks the complete, consistent state at commit.
+        entityManager.flush();
+
+        card.transferOwnership(targetUserId);
+        newOwner.setRole(MembershipRole.OWNER);
+        newOwner.setMemberCardId(cardId);
+        emit(cardId, "OWNERSHIP_TRANSFERRED", actorId,
+                Map.of("fromUserId", actorId, "toUserId", targetUserId));
+        return newOwner;
     }
 
     public CardMembership removeMember(UUID cardId, UUID targetUserId, UUID actorId) {
