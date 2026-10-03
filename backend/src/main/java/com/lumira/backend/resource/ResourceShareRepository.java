@@ -71,4 +71,13 @@ public interface ResourceShareRepository extends JpaRepository<ResourceShare, UU
             "(:type = 'flashcard_set' and s.flashcard_set_id=:artifactId))", nativeQuery = true)
     Optional<ResourceShare> findForArtifactCard(@Param("type") String type,
             @Param("artifactId") UUID artifactId, @Param("cardId") UUID cardId);
+
+    @Query(value = "select * from artifact_share s where s.card_id=:cardId and s.active=true and " +
+            "((:type = 'resource' and s.resource_id=:artifactId) or " +
+            "(:type = 'note' and s.note_id=:artifactId) or " +
+            "(:type = 'studyset' and s.study_set_id=:artifactId) or " +
+            "(:type = 'quiz' and s.quiz_id=:artifactId) or " +
+            "(:type = 'flashcard_set' and s.flashcard_set_id=:artifactId)) FOR SHARE", nativeQuery = true)
+    Optional<ResourceShare> findActiveForArtifactCardForRead(@Param("type") String type,
+            @Param("artifactId") UUID artifactId, @Param("cardId") UUID cardId);
 }

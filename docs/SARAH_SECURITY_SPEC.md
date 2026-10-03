@@ -1,7 +1,7 @@
 # Lumira — Sarah Security Specification
 
 **Governing architecture:** `docs/DECISIONS.md` AD-028, AD-036, AD-054,
-AD-055, AD-056, AD-058, AD-059, AD-065. This document consolidates and
+AD-055, AD-056, AD-058, AD-059, AD-065, AD-080. This document consolidates and
 operationalizes those already-frozen decisions into one implementable
 security boundary for Sarah — it does not introduce new architecture.
 Where something below isn't traceable to one of those ADs, that's a bug in
@@ -42,6 +42,28 @@ occurs*. Concretely:
 - **Retries:** a retried request re-runs authorization in full — a retry
   never reuses a stale authorization result from the failed attempt.
 
+## 2.1 Transient conversation identity (AD-080)
+
+`conversationId` is a client-created opaque UUID that labels a logical
+client-side Sarah conversation across turns. The client sends it on each
+ask; the server accepts a valid UUID without a persistence lookup and
+returns the same value. It is not a SarahSession, persisted conversation,
+or authorization credential, and cannot grant access to any Card, Resource,
+artifact, or another user's data.
+
+`conversationHistory` is the actual caller-supplied context for the current
+request. It is untrusted input/data, not authoritative server-side history
+and not an authorization source. Instructions in that history cannot
+change the caller's permissions or authorize retrieval. The server
+authenticates the caller and checks current persisted domain state before
+protected content enters retrieval, then revalidates authorization for
+each protected retrieval step as required by AD-054/056/058.
+
+B9 requires no server-side conversation/session persistence, transcript
+table, history lookup, conversation-history embeddings, or conversation
+management endpoints. Future persistence needs a separate architecture
+decision and remains subject to the same authorization boundary.
+
 ## 3. Retrieved and generated content is never an authorization grant (AD-058)
 
 This is the direct defense against prompt injection, stated as a domain
@@ -79,6 +101,14 @@ For a request grounded in a Course Space:
 - This boundary is evaluated fresh per request/per retrieval step (§2) —
   it is not cached from a prior turn in the same conversation, since
   membership or sharing state may have changed since.
+
+For contextual Sarah, the request includes a required `cardId` in the
+body. A Resource may be actively shared into multiple Course Spaces, so
+the caller must identify which Card's membership and shared context apply.
+The ID selects the authorization scope; it does not grant access. The
+server independently verifies current Card readability and that the
+selected Resource is owned by the caller or actively shared into that
+Card before including selected Resource context.
 
 ## 5. Provenance never grants authorization (AD-059)
 
@@ -126,9 +156,10 @@ already grant the requesting user.
 ## 8. What this specification does not decide
 
 - Exact conversation/session storage schema (`SarahSession` or equivalent)
-  — remains an explicit deferral per `DECISIONS.md`'s standing note; this
-  spec's requirements apply to however that storage is eventually built,
-  not the other way around.
+  remains deferred. AD-080 specifies only B9's transient API correlation
+  ID and caller-supplied history; it does not introduce persistence. Any
+  future storage design requires a separate explicit decision and must
+  preserve this spec's authorization requirements.
 - Specific database locking/isolation-level strategy for enforcing §2's
   live-recheck requirement — implementation detail, not architecture.
   (Explicitly not prescribing `SERIALIZABLE` isolation, `SELECT FOR

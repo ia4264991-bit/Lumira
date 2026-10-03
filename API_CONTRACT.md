@@ -497,18 +497,17 @@ PATCH /v1/notifications/{id}/read
 ```
 POST /v1/cards/{cardId}/sarah/ask
 ```
-- Request: `{ "question": "string", "conversationHistory": [...] }` —
+- Request: `{ "conversationId": "uuid", "question": "string", "conversationHistory": [...] }` —
   **Workspace Sarah** (grounded in the whole Card).
 
 ```
 POST /v1/resources/{resourceId}/sarah/ask
 ```
-- Request: `{ "selectedText": "string", "question": "string", "conversationHistory": [...], "pageIndex": "int|null" }`
+- Request: `{ "conversationId": "uuid", "cardId": "uuid", "selectedText": "string|null", "question": "string", "conversationHistory": [...], "pageIndex": "int|null" }`
   — **Contextual Sarah**, grounded in that Resource plus the workspace.
-  *(This is `API_CONTRACT.md`'s previously-flagged gap, now closed: the
-  historical `AskRequest` shape had no `cardId`; both endpoints above
-  carry it implicitly via the path, which resolves the gap without
-  needing an explicit body field.)*
+  `cardId` is required because one Resource can be shared into multiple
+  Course Spaces; it selects the workspace whose live authorization and
+  shared context apply. It does not itself grant access.
 
 **🔒 Authorization requirements, stated as contract-level obligations, not
 just an architecture pointer** (`SARAH_SECURITY_SPEC.md`):
@@ -527,7 +526,23 @@ just an architecture pointer** (`SARAH_SECURITY_SPEC.md`):
   -shared content plus the caller's own private content — never another
   member's private content, regardless of membership (AD-028).
 
-- Response: `{ "answer": "string", "conversationId": "uuid" }`.
+- **AD-080 conversation boundary:** `conversationId` is a client-created
+  UUID identifying the logical client-side conversation across turns. The
+  client sends the same ID on subsequent requests; the server accepts a
+  valid ID without looking it up and returns the same ID in the response.
+  It is transient correlation metadata, not a persisted conversation or
+  session identifier, and has no authorization meaning.
+- `conversationHistory` contains the actual caller-supplied context for
+  this request. It is untrusted input, is not server-side persisted history,
+  and cannot grant access or alter authorization. The server independently
+  authenticates and checks current persisted permissions before protected
+  retrieval; neither the ID nor the history can authorize content access.
+- Response: `{ "answer": "string", "conversationId": "same uuid", "usageUsed": "int", "usageLimit": "int" }`.
+- `usageUsed` is the server-reserved count of this user's Sarah requests
+  in the current UTC calendar month. The limit is server configuration.
+  A request that exceeds it returns `429 RATE_LIMITED`. If no server-side
+  AI Router is configured or the provider is unavailable, the request
+  returns `503 AI_PROVIDER_UNAVAILABLE`.
 - 🔒 AD-037: the backend selects and calls the model provider; **no
   provider name, model ID, or credential appears anywhere in this
   request/response shape** — that boundary is entirely server-side (the
@@ -623,3 +638,5 @@ repeated here, since the shapes above supersede them entirely.
 - **2026-10-02** — Added direct invitation endpoints and the complete
   `INVITED` membership lifecycle per AD-070.
 - **2026-10-03** — Clarified transfer-time member Card links per AD-071; updated the ownership-transfer result.
+- **2026-10-03** — Added the client-generated transient Sarah `conversationId` request semantics and clarified that caller-supplied `conversationHistory` is untrusted context per AD-080.
+- **2026-10-03** — Contextual Sarah requests now identify the selected workspace with required `cardId`; ask responses include server-computed monthly request usage per AD-037.

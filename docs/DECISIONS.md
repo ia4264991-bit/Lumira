@@ -730,6 +730,14 @@ closes the persistence-mechanism gap it explicitly left open.
 
 - **Revision note (2026-10-03)** — AD-079 additively resolves notification recipient representation and event-specific audience rules, including AD-046 force-unshare owner delivery, without changing AD-026's single event source or creating a second notification model.
 
+- **AD-080 (additive B9 clarification, 2026-10-03 — transient Sarah conversation identity)** — `conversationId` in the Sarah ask API identifies a logical client-side conversation across turns. The client creates a UUID for a new logical conversation, sends it on each ask, and the server returns that same UUID. The server accepts a valid UUID without requiring a persisted conversation record, does not look up history by it, and does not use it as an authorization credential, authorization input, or basis for access to a Card, Resource, or artifact.
+
+  `conversationHistory` is the actual conversation context supplied for the current request. It is untrusted input/data, not authoritative server-side history and not an authorization source. The server independently authenticates the caller and evaluates current persisted authorization before every protected retrieval, consistent with AD-028, AD-054, AD-056, and AD-058. Neither a malicious conversation ID nor history—including instructions in that history—can grant or expand access. Knowing another user's conversation ID grants no access to that user's data.
+
+  B9 introduces no persisted Sarah conversation/session entity, transcript table, server-side history lookup, conversation-history embeddings, or conversation-management endpoints. This does not define or replace any future persisted Sarah conversation/session domain model under AD-022/AD-049/AD-050. Future server-side persistence requires a separate explicit decision; it must preserve the existing authorization rules.
+
+- **Revision note (2026-10-03)** — AD-080 additively defines the meaning and trust boundary of Sarah's API `conversationId` and `conversationHistory`. It does not introduce persisted conversation state or change AD-022/AD-027/AD-028/AD-037/AD-049/AD-050/AD-054/AD-056/AD-058.
+
 - **Revision note (2026-10-02)** — AD-066 and AD-067 add the previously
   unspecified transfer result and member-Card relationship without
   changing the historical wording of AD-042 or AD-033. AD-068 resolves
@@ -785,6 +793,7 @@ of the previous three passes did.
 
 ## Revisions (new architecture)
 
+- 2026-10-03 — AD-080 additively defines transient Sarah conversation identity and the trust boundary between `conversationId` and caller-supplied `conversationHistory`; no persisted conversation/session model is introduced.
 - 2026-10-02 — AD-066 through AD-069 added from the product owner's
   explicit decision set: transfer outcome, member-Card FK, exact removal
   authority, and separate join-request lifecycle. Historical AD-033,

@@ -12,6 +12,7 @@ import java.util.UUID;
 
 public interface QuizRepository extends JpaRepository<Quiz, UUID> {
     List<Quiz> findByOwner_OwningCardIdOrderByCreatedAtDesc(UUID cardId);
+    List<Quiz> findByOwner_OwningUserIdOrderByCreatedAtDesc(UUID userId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select q from Quiz q where q.id=:id")

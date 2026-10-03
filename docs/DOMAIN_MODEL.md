@@ -407,6 +407,17 @@ never an authorization grant**; a tool call triggered by such content
 still requires the requesting user's own independent, live authorization
 for whatever it names, regardless of what the content says.
 
+**AD-080 (transient conversation identity)** — The Sarah API's
+`conversationId` is an opaque UUID for the logical client-side conversation
+across turns. The client creates and reuses it; the server echoes it and
+does not look up server-side history by it. `conversationHistory` is the
+request's caller-supplied context, not persisted domain history and not an
+authorization source. Neither value grants access; each protected
+retrieval uses the caller's current persisted authorization. B9 creates no
+conversation/session entity or transcript persistence. Future persisted
+conversation/session history remains a separate domain concern under
+AD-022/AD-049/AD-050 and requires an explicit persistence decision.
+
 **AD-055 (output trust)** — Sarah-generated output is treated as untrusted
 input. Before persistence, it must pass structural/schema validation,
 domain validation, and security/input validation — a generated result

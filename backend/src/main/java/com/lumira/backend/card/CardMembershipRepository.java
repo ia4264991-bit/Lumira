@@ -14,6 +14,11 @@ public interface CardMembershipRepository extends JpaRepository<CardMembership, 
 
     Optional<CardMembership> findFirstByCardIdAndUserIdAndStatusIn(UUID cardId, UUID userId, List<MembershipStatus> statuses);
 
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select m from CardMembership m where m.cardId = :cardId and m.userId = :userId and m.status in :statuses")
+    Optional<CardMembership> findCurrentForAuthorizationReadLock(@Param("cardId") UUID cardId,
+            @Param("userId") UUID userId, @Param("statuses") List<MembershipStatus> statuses);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select m from CardMembership m where m.id = :id")
     Optional<CardMembership> findByIdForUpdate(@Param("id") UUID id);

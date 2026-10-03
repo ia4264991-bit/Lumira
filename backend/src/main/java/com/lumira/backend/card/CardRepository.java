@@ -41,6 +41,10 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
     @Query("select c from Card c where c.id = :id")
     Optional<Card> findByIdForAuthorization(@Param("id") UUID id);
 
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select c from Card c where c.id = :id")
+    Optional<Card> findByIdForAuthorizationReadLock(@Param("id") UUID id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Card> findByInviteToken(String inviteToken);
 

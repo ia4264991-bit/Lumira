@@ -12,6 +12,7 @@ import java.util.UUID;
 
 public interface FlashcardSetRepository extends JpaRepository<FlashcardSet, UUID> {
     List<FlashcardSet> findByOwner_OwningCardIdOrderByCreatedAtDesc(UUID cardId);
+    List<FlashcardSet> findByOwner_OwningUserIdOrderByCreatedAtDesc(UUID userId);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from FlashcardSet s where s.id=:id")
     Optional<FlashcardSet> findByIdForUpdate(@Param("id") UUID id);

@@ -44,6 +44,14 @@ lumira:
   resource:
     max-upload-bytes: ${LUMIRA_RESOURCE_MAX_UPLOAD_BYTES:20971520}
     max-pdf-pages: ${LUMIRA_RESOURCE_MAX_PDF_PAGES:500}
+  sarah:
+    usage:
+      monthly-limit: ${LUMIRA_SARAH_MONTHLY_REQUEST_LIMIT:100}
+    provider:
+      enabled: ${LUMIRA_SARAH_PROVIDER_ENABLED:false}
+      chat-completions-url: ${LUMIRA_SARAH_CHAT_COMPLETIONS_URL:}
+      model: ${LUMIRA_SARAH_MODEL:}
+      api-key: ${LUMIRA_SARAH_API_KEY:}
 
 # Hibernate validates the mapped B0-B3 entities against the Flyway-owned
 # schema; schema changes must be introduced through a new migration.
