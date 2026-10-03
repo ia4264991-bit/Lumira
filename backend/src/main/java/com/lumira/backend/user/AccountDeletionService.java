@@ -50,8 +50,26 @@ public class AccountDeletionService {
             throw new AccountDeletionConflictException(activeCourseSpaceIds);
         }
 
-        // Resource row locks serialize deletion with every B4 share mutation.
-        // All writers lock the Resource before inserting/deactivating a share.
+        // Share lifecycle and dissolution lock the Course Space Card before
+        // the Resource. Lock every currently shared-to Card first, in a stable
+        // order, then lock the owned Resources and re-read active shares. The
+        // deleting User lock prevents a new share by the artifact owner while
+        // this snapshot is assembled; Card locks serialize force-unshare and
+        // dissolution so a selected successor cannot disappear mid-transfer.
+        List<UUID> candidateResourceIds = resources.findResourceIdsOwnedByUserOrTheirCards(userId);
+        if (!candidateResourceIds.isEmpty()) {
+            List<ResourceShare> observedShares = shares
+                    .findByResourceIdInAndActiveTrueOrderByResourceIdAscCreatedAtAscIdAsc(candidateResourceIds);
+            List<UUID> sharedCardIds = observedShares.stream().map(ResourceShare::getCardId)
+                    .distinct().sorted().toList();
+            if (!sharedCardIds.isEmpty()) {
+                cards.findByIdInForUpdateOrderById(sharedCardIds);
+            }
+        }
+
+        // The locked Resource rows serialize this transaction with every
+        // B4 share writer. The successor list below is fetched only after all
+        // relevant Course Space Cards and Resources are locked.
         List<Resource> ownedResources = resources.findResourcesOwnedByUserOrTheirCardsForUpdate(userId);
         for (Resource resource : ownedResources) {
             List<ResourceShare> activeShares = shares
@@ -77,6 +95,7 @@ public class AccountDeletionService {
         if (!ownedCardIds.isEmpty()) joinRequests.deleteByCardIdIn(ownedCardIds);
         joinRequests.clearResolverUser(userId);
         memberships.deleteByUserId(userId);
+        if (!ownedCardIds.isEmpty()) memberships.deleteByCardIdIn(ownedCardIds);
         cards.deleteAll(ownedCards);
         users.delete(user);
     }

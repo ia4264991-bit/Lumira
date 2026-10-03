@@ -38,7 +38,6 @@ class ResourceSharingIntegrationTest extends BaseIntegrationTest {
         enableSpace(secondCourseSpace, owner);
         addMembership(courseSpace, admin, card(admin, "Admin personal", false), "ADMIN");
         addMembership(courseSpace, member, card(member, "Member personal", false), "MEMBER");
-        addMembership(secondCourseSpace, owner, secondCourseSpace, "OWNER");
         resource = resource(owner, null, "Shared material");
     }
 
@@ -46,6 +45,10 @@ class ResourceSharingIntegrationTest extends BaseIntegrationTest {
     @DisplayName("Owner sharing grants current members access and unshare revokes it without deleting or transferring ownership")
     void shareAccessAndOrdinaryUnshare() {
         assertThat(share(owner, courseSpace).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(share(owner, courseSpace).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM resource_share WHERE resource_id=? AND card_id=?",
+                Integer.class, resource, courseSpace)).isEqualTo(1);
+        assertThat(eventCount(courseSpace, "ARTIFACT_SHARED")).isEqualTo(1);
         assertThat(read(member).getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(read(outsider).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
@@ -114,10 +117,30 @@ class ResourceSharingIntegrationTest extends BaseIntegrationTest {
     @DisplayName("Artifact owner cannot force-unshare without Course Space authority and failed operations emit no event")
     void forceUnshareRequiresSpaceAuthority() {
         share(owner, courseSpace);
+        assertThat(force(member, courseSpace, Map.of("reason", "SAFETY")).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(force(outsider, courseSpace, Map.of("reason", "SAFETY")).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(activeShare(courseSpace)).isTrue();
         assertThat(eventCount(courseSpace, "CONTENT_FORCE_UNSHARED")).isZero();
+    }
+
+    @Test
+    @DisplayName("Owner may supply a structured reason and a sharer's departure does not remove a share")
+    void ownerReasonIsOptionalAndContributorDeparturePreservesShare() {
+        assertThat(force(owner, courseSpace, Map.of("reason", "SAFETY")).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        share(owner, courseSpace);
+        assertThat(force(owner, courseSpace, Map.of("reason", "SAFETY")).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        UUID contributedResource = resource(member, null, "contributed material");
+        assertThat(request(HttpMethod.POST, member, "/v1/artifacts/resource/" + contributedResource + "/share",
+                Map.of("cardId", courseSpace), Map.class).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        jdbcTemplate.update("UPDATE card_membership SET status='LEFT' WHERE card_id=? AND user_id=?", courseSpace, member);
+        assertThat(request(HttpMethod.GET, owner, "/v1/resources/" + contributedResource, null, byte[].class).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(jdbcTemplate.queryForObject("SELECT active FROM resource_share WHERE resource_id=? AND card_id=?",
+                Boolean.class, contributedResource, courseSpace)).isTrue();
+        assertThat(jdbcTemplate.queryForObject("SELECT owner_user_id FROM resource WHERE id=?", UUID.class, contributedResource)).isEqualTo(member);
     }
 
     private ResponseEntity<Map> share(UUID actor, UUID cardId) {

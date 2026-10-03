@@ -173,11 +173,11 @@ MVP, do not silently pull forward:**
 
 ### B4 — Sharing + Authorization
 - **Objective**: The explicit share-record mechanism (AD-045) and the authorization boundary (AD-041/056).
-- **Scope**: Share record linking artifact→Course Space (not a same-row boolean, per AD-045); unshare/force-unshare authority matrix (AD-044); moderation reasons (AD-047); event generation for share/unshare actions (AD-026 extended types); **deterministic backend authorization for every protected operation — never inferred from object existence, client claims, or cached state (AD-056).**
+- **Scope**: Reuse/generalize B3's explicit `ResourceShare` records (AD-045); share/unshare/force-unshare authority (AD-044/074); moderation reasons (AD-047); event generation (AD-026/046); deterministic live backend authorization (AD-056); atomic account deletion and oldest-active-share successor selection (AD-050/075).
 - **Dependencies**: B1, B2, B3.
-- **Deliverables**: Share-record entity; unshare/force-unshare endpoints; authorization check applied uniformly (not scattered per-endpoint logic).
-- **Tests/validation**: BOLA/IDOR-style probes — an object's existence must never imply access; force-unshare never deletes the artifact or changes ownership (AD-044); sharing survives the sharer leaving Course Space (AD-040) *and* survives account deletion via reassignment to the Course Space's own Card, not a placeholder (AD-050).
-- **Exit criteria**: Every sharing/authorization invariant in AD-040/041/044/045/046/047/056 has a passing test, not just a code path.
+- **Deliverables**: Resource share/unshare/force-unshare endpoints reusing `ResourceShare`; a common Resource access policy used by retrieval and sharing; account deletion honoring AD-049–052 and AD-075.
+- **Tests/validation**: BOLA/IDOR probes; Owner/Admin reason semantics (AD-074); force-unshare preserves artifact ownership and other shares (AD-044); sharing survives contributor departure (AD-040); account deletion selects the oldest active share deterministically and atomically for either owner form (AD-050/075), including concurrent dissolution/unshare revalidation and retained event history (AD-052).
+- **Exit criteria**: Every sharing/authorization invariant in AD-040/041/044/045/046/047/056/074/075 has a passing PostgreSQL-backed integration test, not just a code path.
 
 ### B5 — Notes + Study Sets
 - **Objective**: Two more first-class Card artifacts (AD-029).

@@ -689,9 +689,18 @@ closes the persistence-mechanism gap it explicitly left open.
 
 - **AD-072 (additive physical-column clarification to AD-057, 2026-10-03)** — The shared artifact-owner mapping keeps AD-057's two real nullable foreign keys plus exactly-one CHECK, but its concrete SQL column names are `owner_card_id` and `owner_user_id`. This follows the B3 Resource requirement and does not change ownership semantics, FK targets, cardinality, or the uniform shared JPA mapping. The earlier AD-057 example names are retained as historical decision text; implementations and current schema use these snake_case column names.
 
+- **AD-074 (additive clarification to AD-044/AD-046/AD-047, 2026-10-03 — force-unshare reason semantics)** — The Course Space Owner may force-unshare any shared artifact without supplying a moderation reason. An ACTIVE Course Space Admin may force-unshare a shared artifact only when a valid structured moderation reason is supplied. Both operations emit `CONTENT_FORCE_UNSHARED`. Its event payload contains `reason`, nullable for Owner-initiated force-unshare and required for Admin-initiated force-unshare, plus an optional free-text `note`. `CONTENT_UNSHARED` remains reserved for an artifact owner's ordinary voluntary unshare. No other part of AD-044, AD-046, or AD-047 changes. Force-unsharing never deletes an artifact, changes its ownership, or affects shares into other Course Spaces.
+
+- **AD-075 (additive clarification to AD-050, 2026-10-03 — deterministic ownership successor)** — At account deletion, an artifact with no active Course Space share records follows AD-049 and is deleted as private/non-shared data. An artifact with one or more active share records survives per AD-050 and is reassigned to the Course Space Card identified by the oldest currently active share record, ordered by share-record `created_at ASC`, then immutable share-record `id ASC`. For a Resource, the record is `ResourceShare`; the transition sets `owner_card_id` to that record's `card_id` and `owner_user_id` to NULL, preserving AD-057's exactly-one-owner invariant. The rule applies whether the former owner was represented by `owner_user_id` or by an `owner_card_id` belonging to the deleting User. Every other active share remains unchanged. Successor selection uses live persisted state in the same deletion transaction. The former User/Card cannot be deleted while any surviving artifact still references it. No primary/canonical Course Space or additional ownership relationship is introduced. AD-050's historical wording is unchanged.
+
 - **Revision note (2026-10-03)** — AD-071 closes the ownership-transfer
   member-Card integrity gap additively; historical wording in AD-066 and
   AD-067 remains unchanged.
+
+- **Revision note (2026-10-03)** — AD-074 clarifies the role-dependent
+  force-unshare reason requirement without changing AD-044, AD-046, or
+  AD-047's historical wording. AD-075 defines a deterministic oldest-active-
+  share ownership successor without changing AD-050's historical meaning.
 
 - **Revision note (2026-10-02)** — AD-066 and AD-067 add the previously
   unspecified transfer result and member-Card relationship without

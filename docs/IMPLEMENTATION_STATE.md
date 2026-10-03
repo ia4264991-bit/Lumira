@@ -14,12 +14,12 @@ STATUS: IN_PROGRESS
 LAST_COMPLETED_MILESTONE: B3 - Resources
 IN_PROGRESS: B4 - Sharing + Authorization
 NEXT_MILESTONE: B5 - Notes + Study Sets
-BLOCKERS: None for B3/B4.
-LAST_VALIDATED_COMMIT: 680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1
+BLOCKERS: None for B4 implementation or PostgreSQL validation. B4 closeout remains pending review and commit of the validated working tree.
+LAST_VALIDATED_COMMIT: Working tree based on `04c5b8dca4b4683265d27fe0442bffbf2e14249f`; B4 changes remain uncommitted.
 IMPLEMENTATION_COMMITS: B2 architecture clarification `7cddade`; ownership transfer `91eae6e`; transfer integration tests `82ecd3c`; B2 in-progress state `03ce622`; integrity-trigger migration and lifecycle assertion fix `b08dbb5`.
-LAST_VALIDATION: 2026-10-03 - User-run `mvn clean test -DforkCount=1 -DreuseForks=false` from the backend directory completed with BUILD SUCCESS: 42 tests run, 0 failures, 0 errors, 0 skipped, against the configured PostgreSQL integration database. Validated and pushed B3 source commit: `680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`.
+LAST_VALIDATION: 2026-10-03 - User-run `mvn clean test -DforkCount=1 -DreuseForks=false` from the backend directory completed with BUILD SUCCESS against PostgreSQL: 55 tests run, 0 failures, 0 errors, 0 skipped. This validates the current uncommitted B4 working tree based on `04c5b8dca4b4683265d27fe0442bffbf2e14249f`; it is not yet a committed B4 milestone.
 ARCHITECTURE_BLOCKER: None for B2 or B3. AD-071 (2026-10-03) additively resolves the AD-066/AD-067 transfer/memberCardId conflict. AD-072 clarifies the physical owner column names without changing AD-057 semantics.
-NOTES: B2 is complete; its validation source is `b08dbb5`, and closure documentation is committed at `2f6a2c1`. B3 Resources is implemented, PostgreSQL-validated, committed, and pushed at `680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`; the user-run suite reported 42 tests with no failures or errors. Direct invitations use INVITED membership episodes per AD-070; do not introduce PENDING as a membership status. The V5 migration fixes the row-type access defect in the deferred V4 owner/member-Card integrity trigger. B3 introduces no ResourceVersion/ContentVersion or asynchronous processing infrastructure.
+NOTES: B2 is complete; its validation source is `b08dbb5`, and closure documentation is committed at `2f6a2c1`. B3 Resources is implemented, PostgreSQL-validated, committed, and pushed at `680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`; the user-run suite reported 42 tests with no failures or errors. Direct invitations use INVITED membership episodes per AD-070; do not introduce PENDING as a membership status. The V5 migration fixes the row-type access defect in the deferred V4 owner/member-Card integrity trigger. B3 introduces no ResourceVersion/ContentVersion or asynchronous processing infrastructure. B4 implementation and PostgreSQL validation are complete in the current working tree based on `04c5b8dca4b4683265d27fe0442bffbf2e14249f`; the user-run suite reported 55 tests with no failures or errors. The B4 changes and this validation-state update still require review and commit; do not start B5 before B4 is committed.
 ```
 
 ---
@@ -53,7 +53,7 @@ it exists."**
 - [x] B1 — Identity + Personal Cards
 - [x] B2 — Course Spaces (`b08dbb53a634a626d4606ad244af7041d778e911`; 33/33 PostgreSQL integration tests)
 - [x] B3 — Resources (`680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`; 42/42 PostgreSQL integration tests)
-- [ ] B4 — Sharing + Authorization (active milestone)
+- [ ] B4 — Sharing + Authorization (implementation and PostgreSQL validation passed in working tree; commit pending)
 - [ ] B5 — Notes + Study Sets
 - [ ] B6 — Quizzes
 - [ ] B7 — Flashcards

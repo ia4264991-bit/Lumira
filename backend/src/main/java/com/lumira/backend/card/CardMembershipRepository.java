@@ -47,4 +47,6 @@ public interface CardMembershipRepository extends JpaRepository<CardMembership, 
 
     long deleteByUserId(UUID userId);
 
+    long deleteByCardIdIn(List<UUID> cardIds);
+
 }

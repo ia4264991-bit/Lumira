@@ -13,6 +13,12 @@ public interface ResourceRepository extends JpaRepository<Resource, UUID> {
     List<Resource> findByOwner_OwningCardIdOrderByCreatedAtDesc(UUID cardId);
     List<Resource> findByOwner_OwningUserIdOrderByCreatedAtDesc(UUID userId);
 
+    @Query(value = "select r.id from resource r " +
+            "where r.owner_user_id = :userId " +
+            "or r.owner_card_id in (select c.id from card c where c.owner_id = :userId) " +
+            "order by r.id", nativeQuery = true)
+    List<UUID> findResourceIdsOwnedByUserOrTheirCards(@Param("userId") UUID userId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from Resource r where r.id = :id")
     java.util.Optional<Resource> findByIdForUpdate(@Param("id") UUID id);

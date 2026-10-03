@@ -19,6 +19,8 @@ public interface ResourceShareRepository extends JpaRepository<ResourceShare, UU
 
     List<ResourceShare> findByResourceIdAndActiveTrueOrderByCreatedAtAscIdAsc(UUID resourceId);
 
+    List<ResourceShare> findByResourceIdInAndActiveTrueOrderByResourceIdAscCreatedAtAscIdAsc(List<UUID> resourceIds);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from ResourceShare s where s.resourceId = :resourceId and s.cardId = :cardId")
     Optional<ResourceShare> findByResourceIdAndCardIdForUpdate(@Param("resourceId") UUID resourceId,

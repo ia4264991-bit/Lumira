@@ -258,21 +258,31 @@ POST   /v1/artifacts/{artifactType}/{artifactId}/force-unshare/{cardId}
 - 🔒 AD-045: this is an **explicit share record**, not a same-row boolean
   — the API models it as its own relationship (share/unshare as distinct
   operations on a link), never as a field toggle on the artifact itself.
+- Share request: `{ "cardId": "uuid" }`. Only the artifact owner may
+  create/reactivate its share, and must be an ACTIVE member of the target
+  Course Space. A newly created or reactivated link returns `201`; an
+  already-active link is idempotent (`200`) and emits no duplicate event.
+  A successful change emits `ARTIFACT_SHARED` in that Course Space.
 - 🔒 AD-044 authorization matrix, enforced exactly:
 
 | Caller | Endpoint | Allowed? |
 |---|---|---|
 | Artifact owner | unshare (their own) | Always |
-| Course Space Owner | force-unshare (anyone's) | Always |
-| Course Space Admin | force-unshare (anyone's) | Only with `reason` supplied |
+| Course Space Owner | force-unshare (anyone's) | Always; reason optional |
+| Course Space Admin | force-unshare (anyone's) | Only with valid `reason` supplied |
 | Ordinary Member | any of the above on others' content | Never — `403` |
 
-- Force-unshare request: `{ "reason": "COPYRIGHT|PRIVACY|SAFETY|ABUSE|MALICIOUS_CONTENT|POLICY_VIOLATION|OTHER", "note": "string (optional)" }` (AD-047).
+- Force-unshare request: `{ "reason": "COPYRIGHT|PRIVACY|SAFETY|ABUSE|MALICIOUS_CONTENT|POLICY_VIOLATION|OTHER", "note": "string (optional)" }`; Owner may omit `reason`, Admin must supply a valid value (AD-074).
 - 🔒 Force-unsharing never deletes the artifact or changes ownership —
   response `200` returns the artifact unchanged except its share state.
 - Effect: emits `CONTENT_UNSHARED` or `CONTENT_FORCE_UNSHARED` (AD-046);
   the artifact's owner receives a notification on force-unshare, derived
   from that event, not a separate notification call.
+- `CONTENT_FORCE_UNSHARED` payload always contains `reason` (nullable for
+  Owner, required for Admin) and optional `note`. It affects only the
+  selected Course Space share; other shares, artifact ownership, and the
+  artifact row remain unchanged.
+- Failed or stale unshare operations do not mutate a share or emit an event.
 
 ---
 
@@ -438,6 +448,14 @@ DELETE /v1/me
   to that Course Space's own Card (AD-050), including a shared Sarah
   conversation if one exists (AD-022/050). Historical events referencing
   the deleted user as actor are retained (AD-052).
+- 🔒 AD-075: active shares survive. The successor is the Course Space Card
+  from the oldest active share record (`created_at ASC`, then record `id
+  ASC`); Resource uses its actual `ResourceShare.card_id`. All secondary
+  active shares remain unchanged. This covers both User-owned and deleting-
+  User-Card-owned Resources. Artifacts with no active shares follow AD-049.
+- If AD-051 blocks deletion, the `409` error details contain
+  `courseSpaceCardIds`, identifying the active Course Space Cards the caller
+  must transfer or dissolve before retrying.
 - Response `204` on success.
 
 ---

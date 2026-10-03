@@ -252,6 +252,12 @@ with `COPYRIGHT`, `PRIVACY`, `SAFETY`, `ABUSE`, `MALICIOUS_CONTENT`,
 `POLICY_VIOLATION`, `OTHER`, plus optional free-text note. Required on
 `CONTENT_FORCE_UNSHARED` only.
 
+**AD-074 (additive clarification)** — A Course Space Owner may force-unshare
+without a moderation reason; an ACTIVE Admin must supply a valid structured
+reason. Both emit `CONTENT_FORCE_UNSHARED`; its payload has nullable `reason`
+(null only for Owner-initiated operation) and optional `note`. Ordinary
+artifact-owner withdrawal continues to emit `CONTENT_UNSHARED`.
+
 ---
 
 ## 13. Course Space Events and Notifications
@@ -394,6 +400,19 @@ never touches any member's own Card, including the departing Owner's.
 referencing a deleted user are **retained**, never rewritten or
 cascade-deleted. Exact representation of a reference to a deleted identity
 is implementation detail.
+
+**AD-075 (deterministic successor during account deletion)** — If an
+artifact has active share records at deletion time, select its successor
+Course Space from live persisted records ordered by share creation timestamp
+ascending, then immutable share-record ID ascending. For a Resource this is
+`ResourceShare.created_at`, then `ResourceShare.id`; its `card_id` is the
+Course Space Card. Set Resource ownership to `owner_card_id=<selected card>`
+and `owner_user_id=NULL`. This applies to Resources previously owned
+directly by the User or by one of the User's Cards. Keep every other active
+share unchanged. With zero active shares, delete the artifact as private
+data per AD-049. Reassignment and account deletion are one atomic operation,
+and the former User/Card is removed only after no surviving Resource
+references it.
 
 ```
 Event                | Artifact  | Share record        | Visibility

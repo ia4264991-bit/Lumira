@@ -26,6 +26,10 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
     @Query("select c from Card c where c.ownerId = :ownerId order by c.id")
     List<Card> findByOwnerIdForUpdateOrderById(@Param("ownerId") UUID ownerId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Card c where c.id in :ids order by c.id")
+    List<Card> findByIdInForUpdateOrderById(@Param("ids") List<UUID> ids);
+
     boolean existsByIdAndOwnerId(UUID id, UUID ownerId);
 
     Optional<Card> findByIdAndOwnerId(UUID id, UUID ownerId);
@@ -34,7 +38,6 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
     @Query("select c from Card c where c.id = :id")
     Optional<Card> findByIdForUpdate(@Param("id") UUID id);
 
-    @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("select c from Card c where c.id = :id")
     Optional<Card> findByIdForAuthorization(@Param("id") UUID id);
 
