@@ -28,7 +28,7 @@ in `docs/DECISIONS.md` (AD-019 onward), consolidated in
 
 | Area | Status |
 |---|---|
-| Backend | B0-B9 are committed. B9 Sarah Foundation is at `857630e39fdb66dea90c92bb2d7f0a5780c45615` and passed PostgreSQL validation: 84 tests, 0 failures, 0 errors, 0 skipped. B10 Sarah Generation is in progress; Summary generation is deferred under AD-081. |
+| Backend | B0-B10 are committed. B10 Sarah Generation is at `3e7adaa5ad21be9db9f63a60d337073cd2674145` and passed PostgreSQL validation: 88 tests, 0 failures, 0 errors, 0 skipped. Summary generation is deferred under AD-081. B11 Backend Integration + Security is next. |
 | Architecture | AD-066 through AD-077 define transfer, membership, sharing, deterministic account-deletion ownership succession, Notes/Study Sets, and the canonical Quiz/personal QuizAttempt model. B6 reuses AD-057 ownership and AD-045 sharing. |
 | Frontend | Working Kotlin/Compose PDF-reader/auth/chat thin client; it predates the Card/Course Space pivot. See `frontend/README.md`. |
 | API contract | Live and authoritative at the network boundary; B2-B6 endpoint contracts are maintained in `API_CONTRACT.md`. |
@@ -38,7 +38,7 @@ in `docs/DECISIONS.md` (AD-019 onward), consolidated in
 
 1. B4 Sharing + Authorization is complete at `91afb90a7d48816ee329b5b3809d2ce9c0793cdd` after the 55-test PostgreSQL suite passed.
 2. B5 Notes + Study Sets is complete at `4806efdff861e7a8eb009d58edb02abb3f413d73` after the 60-test PostgreSQL suite passed; its completion record is `72d5c9d34339d617fae6d52f3f7eb02389a9a66a`.
-3. B6 Quizzes, B7 Flashcards, B8 Events + Notifications, and B9 Sarah Foundation are complete and validated. B10 Sarah Generation is in progress for FlashcardSet, Quiz, and StudySet; Summary remains deferred under AD-081.
+3. B6 Quizzes, B7 Flashcards, B8 Events + Notifications, B9 Sarah Foundation, and B10 Sarah Generation are complete and validated. B10 supports FlashcardSet, Quiz, and StudySet; Summary remains deferred under AD-081. B11 Backend Integration + Security is next.
 ## Three-way collaboration structure
 
 Unchanged by this retirement — this is a workflow pattern, not part of the
