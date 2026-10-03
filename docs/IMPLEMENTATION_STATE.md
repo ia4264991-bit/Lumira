@@ -11,14 +11,14 @@ correct without checking.
 CURRENT_PHASE: Backend Implementation
 CURRENT_MILESTONE: B2 - Course Spaces
 STATUS: IN_PROGRESS
-LAST_COMPLETED_MILESTONE: B0 - Infrastructure/Foundation
-IN_PROGRESS: B2 Course Space persistence, lifecycle, and authorization
-NEXT_MILESTONE: B2 - Course Spaces implementation
-BLOCKERS: Transfer code/tests remain gated on clarifying AD-066/AD-067: transfer changes the shared Card owner and target/former-Owner roles, while AD-067 requires each membership's memberCardId to point to a Card owned by that member and the Owner membership to point to the shared Card. Maven test validation in this Codex sandbox is currently blocked by java.nio.file.AccessDeniedException while javac closes a dependency JAR; Maven must run successfully in the user's external PowerShell environment before B2 can be validated.
-LAST_VALIDATED_COMMIT: working tree based on fa4134e86fa94ffa6056ae147c32aa339435bb4b (B1 corrections are present locally but not committed)
-LAST_VALIDATION: 2026-10-02 - User-provided external Maven output reports BUILD SUCCESS and 27 tests passing on PostgreSQL 18.3. Flyway validated three migrations and applied V3 (rename user to app_user); Hibernate initialized successfully. This validates the local B1 corrections in the provided run. The B1 correction commit is still outstanding.
-ARCHITECTURE_BLOCKER: Clarification requested for the AD-066/AD-067 transfer/memberCardId interaction. Other B2 paths are under implementation, including sharing, live Card authorization, invite links, join requests, direct invitations, membership lifecycle, event persistence, and PostgreSQL-backed integration tests.
-NOTES: Direct invitations use INVITED membership episodes per AD-070; do not introduce PENDING as a membership status. Ownership transfer remains unimplemented pending clarification. No B2 code or tests have yet passed Maven validation in this sandbox.
+LAST_COMPLETED_MILESTONE: B1 - Identity + Personal Cards
+IN_PROGRESS: B2 ownership transfer, PostgreSQL integration coverage, and full-suite verification
+NEXT_MILESTONE: Complete B2 - Course Spaces
+BLOCKERS: Full Maven validation is blocked in this Windows sandbox: `javac` throws `java.nio.file.AccessDeniedException` in `ZipFileSystemProvider.removeFileSystem` while closing a dependency JAR (`micrometer-commons-1.13.4.jar` / `jackson-dataformat-toml-2.17.2.jar`). Reproduced with Java 21, 24, and 25, with Maven caches in `%USERPROFILE%\.m2`, `%TEMP%`, and a writable workspace folder, and with `-DforkCount=1 -DreuseForks=false`; no tests ran. No leftover Maven/Java process was found. Sysinternals Handle was not installed and its download failed with a PowerShell TLS connection-close error; Resource Monitor inspection was unavailable because the Windows UI helper failed to write kernel assets. The project is outside OneDrive. Defender preference query returned Access Denied; automatic approval review rejected adding exclusions because it weakens system security. Docker is absent and no WSL distribution is installed. PostgreSQL 18.3 service is running and accepting connections on localhost:5432.
+LAST_VALIDATED_COMMIT: fa4134e86fa94ffa6056ae147c32aa339435bb4b (B1 validation commit; see LAST_VALIDATION)
+LAST_VALIDATION: 2026-10-03 - `mvn clean test -DforkCount=1 -DreuseForks=false` failed during main-source compilation while javac closed a dependency JAR; Surefire/test phase was not reached (0 tests executed). Reproduced with JDK 21/24/25 and alternate local Maven cache paths. Prior B1 validation: user-provided external Maven output on 2026-10-02 reports BUILD SUCCESS, 27 tests passing on PostgreSQL 18.3, with three Flyway migrations validated and V3 applied; this does not validate B2 or current HEAD.
+ARCHITECTURE_BLOCKER: None. AD-071 (2026-10-03) additively resolves the AD-066/AD-067 transfer/memberCardId conflict; implementation and real PostgreSQL validation remain outstanding.
+NOTES: Direct invitations use INVITED membership episodes per AD-070; do not introduce PENDING as a membership status. Transfer implementation and PostgreSQL integration tests are in the working tree, but they are unverified. Preserve the deferred V4 owner/member-Card trigger. B2 remains IN_PROGRESS until its full real PostgreSQL suite passes.
 ```
 
 ---

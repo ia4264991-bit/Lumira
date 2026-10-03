@@ -1,6 +1,6 @@
 # Lumira API Contract
 
-**Status: LIVE, rebuilt 2026-09-12 and extended 2026-10-02** from `docs/DECISIONS.md` (AD-019–070),
+**Status: LIVE, rebuilt 2026-09-12 and extended through 2026-10-03** from `docs/DECISIONS.md` (AD-019–071),
 `docs/DOMAIN_MODEL.md`, `docs/RESOURCE_FILE_PROCESSING_SPEC.md`,
 `docs/SARAH_SECURITY_SPEC.md`, and `docs/IMPLEMENTATION_PLAN.md`. This
 supersedes the prior retired/historical version of this file (its content
@@ -177,7 +177,7 @@ POST   /v1/cards/{cardId}/leave
 - Only the Owner may promote/demote or remove a Member/Admin. Admins cannot promote, demote, or remove anyone. The Owner cannot be removed through this endpoint (AD-034/068).
 - Leave is self-initiated by an ACTIVE non-Owner. Owner leave returns `409 Conflict` until the Owner first transfers ownership or dissolves the Course Space (AD-042/063).
 
-### Ownership transfer (AD-042, AD-043, AD-061, AD-066)
+### Ownership transfer (AD-042, AD-043, AD-061, AD-066, AD-067, AD-071)
 
 ```http
 POST /v1/cards/{cardId}/transfer-ownership
@@ -185,7 +185,9 @@ POST /v1/cards/{cardId}/transfer-ownership
 
 - Request: `{ "targetUserId": "uuid" }`; only the current Owner may initiate.
 - Target must be an existing ACTIVE member, revalidated at completion inside the atomic transaction (AD-061). A no-longer-eligible target returns `409 Conflict`.
+- A self-transfer is rejected with `409 Conflict`.
 - On success, `card.owner_id` and the target membership role become the new Owner; the previous Owner becomes ADMIN and remains ACTIVE. Exactly one ACTIVE OWNER membership matches `card.owner_id` before and after. The previous Owner may later leave normally (AD-066).
+- In the same transaction, the new Owner membership's `memberCardId` becomes `cardId`. The former Owner receives a newly created personal Card owned by them, named and colored from the Course Space Card, and their membership `memberCardId` is updated to that Card. The target's previous personal Card remains theirs but is no longer referenced by the Owner membership. The former Owner's former personal member Card is not reconstructed from historical state (AD-067/071).
 - Emits `OWNERSHIP_TRANSFERRED`. No transfer request/acceptance flow and no automatic/random assignment.
 
 ### Dissolution (AD-051, AD-063)
@@ -460,3 +462,4 @@ repeated here, since the shapes above supersede them entirely.
   join-request lifecycle.
 - **2026-10-02** — Added direct invitation endpoints and the complete
   `INVITED` membership lifecycle per AD-070.
+- **2026-10-03** — Clarified transfer-time member Card links per AD-071; updated the ownership-transfer result.

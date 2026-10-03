@@ -685,6 +685,12 @@ closes the persistence-mechanism gap it explicitly left open.
 
   Declining an invitation is self-initiated and changes `INVITED` to `LEFT`, retaining the episode and member Card; it records `MEMBER_INVITATION_DECLINED` and grants no access. The Course Space Owner may withdraw an unaccepted invitation, changing `INVITED` to `REMOVED` and retaining its history; this is Owner removal under AD-068 and records `MEMBER_INVITATION_WITHDRAWN`. Admins cannot withdraw invitations. A new invitation after either terminal state creates a fresh episode and reuses the same member Card. All four event names are ordinary string-backed AD-026 event types, not enum values. Public invite-link joins remain the distinct AD-025/069 flow; once approved or open-joined they produce ACTIVE membership directly.
 
+- **AD-071 (additive clarification to AD-066/AD-067 — member Card links during ownership transfer, 2026-10-03)** — Ownership transfer updates the existing ACTIVE membership episodes in place as AD-066 specifies. Because AD-067 requires every `memberCardId` to reference a Card owned by that membership's `userId`, the new Owner's membership `memberCardId` is set to the Course Space Card's own `cardId`. The new Owner's former personal member Card remains an ordinary Card owned by them, but is no longer referenced by that membership episode. The former Owner becomes ADMIN and remains ACTIVE; in the same transaction, the system creates a new personal Card for the former Owner, owned by them and initialized with the Course Space Card's current name and color, then sets the former Owner membership's `memberCardId` to that Card. The former Owner's previous member Card was the shared Course Space Card and cannot be recovered from membership history because AD-066 changes roles in place; do not infer or reconstruct a historical link. This operation creates no identity and changes no Card ownership other than the Course Space Card's transfer to the target. All updates and the `OWNERSHIP_TRANSFERRED` event are atomic. This closes the AD-066/AD-067 integrity gap while retaining the owner/member-Card invariant enforced by the V4 deferred constraint trigger.
+
+- **Revision note (2026-10-03)** — AD-071 closes the ownership-transfer
+  member-Card integrity gap additively; historical wording in AD-066 and
+  AD-067 remains unchanged.
+
 - **Revision note (2026-10-02)** — AD-066 and AD-067 add the previously
   unspecified transfer result and member-Card relationship without
   changing the historical wording of AD-042 or AD-033. AD-068 resolves
@@ -746,6 +752,9 @@ of the previous three passes did.
   AD-034, and AD-042 text was retained; additive entries clarify and
   supersede only the noted gaps/contradictions. Direct-invitation
   AD-070 closes the direct-invitation lifecycle question for `INVITED`.
+
+- 2026-10-03 — AD-071 additively closes the member-Card linkage gap during
+  transfer without changing AD-066 or AD-067's historical wording.
 
 - 2026-09-12 — AD-019 through AD-028 added: first formal architecture pass
   for the Card/Course Space/Sarah model, following the retirement of the

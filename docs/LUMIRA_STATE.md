@@ -3,12 +3,11 @@
 > ⚠️ **OLD ARCHITECTURE RETIRED — 2026-09-12.** This file's "What Lumira is,"
 > "Current state," and "Roadmap methodology" sections previously described
 > the academic-hierarchy architecture and its Step 1–7 backend rollout.
-> **That content has been retired** and is replaced below with the actual
-> current state: a UX prototype exists as the product reference, and a new
-> architecture has not yet been written around it. The "Planned but not yet
-> designed" and "Competitive notes" sections below predate this retirement
-> but describe the *new* direction, not the old one — they are preserved
-> unchanged.
+> **That content has been retired.** The current architecture is recorded
+> in `docs/DECISIONS.md` and derived in `docs/DOMAIN_MODEL.md`; this file
+> records project status only. The "Planned but not yet designed" and
+> "Competitive notes" sections below remain product context, not approved
+> implementation scope.
 
 **This file describes status, not architecture.** See
 `docs/CLAUDE_PROJECT_RULES.md` for how this file relates to other documents
@@ -22,24 +21,24 @@ architecture, not assumed to carry over unchanged from the old hierarchy.
 A study platform built around Card as its sole workspace entity, with
 Course Space as the sharing/collaboration capability on a Card and Sarah as
 a first-class workspace capability. The current architecture is recorded
-in `docs/DECISIONS.md` (AD-019 through AD-070), consolidated in
+in `docs/DECISIONS.md` (AD-019 through AD-071), consolidated in
 `docs/DOMAIN_MODEL.md`, and reflected in `API_CONTRACT.md`.
 
 ## Current repository state (verified 2026-10-03)
 
 | Area | Status |
 |---|---|
-| Backend | B0/B1 code exists; user-provided Maven output reports 27/27 tests passing against PostgreSQL 18.3 with V3 applied. B1 corrections remain uncommitted. B2 implementation and PostgreSQL integration tests are in the working tree but have not passed Maven validation in this sandbox. |
-| Architecture | AD-066 through AD-070 define transfer, member-Card linkage, removal, join requests, and direct invitations. Transfer implementation remains gated on the AD-066/AD-067 memberCardId interaction, for which clarification has been requested. |
+| Backend | `origin/master` is `976615b`; it contains B0/B1 and the initial B2 lifecycle implementation. Prior user-provided output reports 27/27 B1 tests passing on PostgreSQL 18.3. This session has added AD-071 and transfer code/tests locally; Maven has not reached the test phase because javac fails with `AccessDeniedException` closing a dependency JAR. |
+| Architecture | AD-066 through AD-071 define transfer, member-Card linkage, removal, join requests, direct invitations, and transfer-time member Card relinking. The transfer architecture blocker is resolved by AD-071. |
 | Frontend | Working Kotlin/Compose PDF-reader/auth/chat thin client; it predates the Card/Course Space pivot. See `frontend/README.md`. |
-| API contract | Live and authoritative at the network boundary; B2 sections extended from AD-066 through AD-070. |
+| API contract | Live and authoritative at the network boundary; B2 sections extended through AD-071. |
 | UX prototype | Standalone HTML/CSS/JS artifact exists outside this repository; it remains the product reference. |
 
 ## What's next
 
-1. Resolve the AD-066/AD-067 `memberCardId` behavior across ownership transfer.
-2. Finish B2 lifecycle/security tests and validate migrations against PostgreSQL.
-3. Reconcile/commit the B1 corrections with B2, then complete and push B2.
+1. Resolve the Windows javac/JAR `AccessDeniedException` and run the full suite against PostgreSQL.
+2. Fix any compile/test failures, then record actual B2 validation.
+3. Commit and push the transfer implementation with honest in-progress state if validation remains blocked; do not mark B2 complete until the full suite passes.
 ## Three-way collaboration structure
 
 Unchanged by this retirement — this is a workflow pattern, not part of the

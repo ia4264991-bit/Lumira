@@ -22,7 +22,7 @@ alongside this cleanup; see its own banner for current status) →
 order only).
 
 **This plan does not decide architecture.** Every milestone below is
-scoped to what AD-001–AD-070 already permit (AD-001–018 retired/
+scoped to what AD-001–AD-071 already permit (AD-001–018 retired/
 historical; AD-019 onward live — see `docs/DECISIONS.md`'s own banners).
 If a milestone turns out to need a decision that isn't in `DECISIONS.md`,
 that is not this document's job to invent.
@@ -81,22 +81,14 @@ much of it has actually been built.
 
 ## 2. Current repository state (verified, not assumed)
 
-As of commit `b6e2ec4`:
+As verified against `origin/master` at `976615ba3e2bfd749df548677b45c671374ce4c2` on 2026-10-03:
 
-- **Backend**: Spring Boot skeleton + PostgreSQL/JPA/Flyway/Docker Compose
-  infrastructure only. One migration (`V1__enable_pgcrypto_extension.sql`).
-  One real endpoint (`GET /v1/health`). Eleven package directories, all
-  containing only a retired/neutral `package-info.java` — **zero domain
-  entities of any kind exist.**
-- **Frontend**: real, working PDF-reader/auth/chat thin client (Selection
-  Engine complete, Room persistence, auth screens, chat UI) — predates the
-  Card/Course Space pivot, not yet rebuilt around it.
-- **`API_CONTRACT.md`**: retired. Historical DTO shapes preserved for
-  reference only, not a build target.
+- **Backend**: B0 and B1 exist, and B1's prior externally reported PostgreSQL validation is recorded in `docs/IMPLEMENTATION_STATE.md`. B2 includes sharing, memberships, invitations, join requests, lifecycle operations, and PostgreSQL integration tests. Ownership transfer is the remaining implementation item; the current working-tree transfer changes have not passed Maven validation.
+- **Frontend**: real, working PDF-reader/auth/chat thin client (Selection Engine complete, Room persistence, auth screens, chat UI) — predates the Card/Course Space pivot, not yet rebuilt around it.
+- **`API_CONTRACT.md`**: live and authoritative at the network boundary.
 - **No admin web application exists yet in any form.**
 
-**Every milestone below starts from this baseline, not from an assumed
-head start.**
+This records the verified starting point for the current B2 continuation; later implementation status belongs in `docs/IMPLEMENTATION_STATE.md`.
 
 ---
 
@@ -144,11 +136,11 @@ MVP, do not silently pull forward:**
 
 ### B2 — Course Spaces (Card capability, AD-019 - no separate entity)
 - **Objective**: Course Space behavior as a capability on the existing Card row, with membership, invite, join-request, and ownership lifecycle.
-- **Scope**: `card.isShared`; `card_membership` with distinct `cardId`, `userId`, `memberCardId`, `status`, and `role`; the four membership statuses and three roles; database-enforced ACTIVE/INVITED uniqueness; membership access independent from Card/artifact ownership; invite-link token/version rotation; separate `card_join_request` lifecycle; direct invitations as INVITED membership episodes with accept/decline/Owner withdrawal; join/rejoin using the recorded member Card; Owner-only member role/removal powers; leave, dissolve, and the exact atomic transfer result; emit `OWNERSHIP_TRANSFERRED`. No `CourseSpace` entity/table.
+- **Scope**: `card.isShared`; `card_membership` with distinct `cardId`, `userId`, `memberCardId`, `status`, and `role`; the four membership statuses and three roles; database-enforced ACTIVE/INVITED uniqueness; membership access independent from Card/artifact ownership; invite-link token/version rotation; separate `card_join_request` lifecycle; direct invitations as INVITED membership episodes with accept/decline/Owner withdrawal; join/rejoin using the recorded member Card; Owner-only member role/removal powers; leave, dissolve, and the exact atomic transfer result including transfer-time member Card relinking per AD-071; emit `OWNERSHIP_TRANSFERRED`. No `CourseSpace` entity/table.
 - **Dependencies**: B1.
-- **Deliverables**: Flyway migration for membership, member-Card relationship, invite-link version, and join-request persistence; repositories/services/controllers; filtered Course Space Card reads and lifecycle API from `API_CONTRACT.md`; append-only transfer event emission required by AD-042/066.
+- **Deliverables**: Flyway migration for membership, member-Card relationship, invite-link version, and join-request persistence; repositories/services/controllers; filtered Course Space Card reads and lifecycle API from `API_CONTRACT.md`; append-only transfer event emission required by AD-042/066/071.
 - **Tests/validation**: Real PostgreSQL tests for Owner/Admin/Member/INVITED and inactive-member access; direct invitation authorization/idempotency/accept/decline/withdrawal; join approval/rejection/reset invalidation; initial join/rejoin Card identity; partial unique index behavior; role/removal permissions per AD-034/068; Owner leave blocked until transfer; transfer target revalidation and exact roles; atomic persistence/event; no separate CourseSpace table.
-- **Exit criteria**: Sharing, membership, join/rejoin, link rotation, removal/leave, and transfer behave as specified by AD-019, AD-023/024/025, AD-031/032/033/034, AD-042/043, AD-060/061/062/066/067/068/069/070 and the API contract. `card` remains the sole workspace entity.
+- **Exit criteria**: Sharing, membership, join/rejoin, link rotation, removal/leave, and transfer behave as specified by AD-019, AD-023/024/025, AD-031/032/033/034, AD-042/043, AD-060/061/062/066/067/068/069/070/071 and the API contract. `card` remains the sole workspace entity.
 ### B3 — Resources
 - **Objective**: The `Resource` entity and its processing lifecycle, per AD-021/AD-057 and `docs/RESOURCE_FILE_PROCESSING_SPEC.md`. *(Not a generalized versioning system — no `ResourceVersion`/`ContentVersion` entity is implied or required; see the note below.)*
 - **Scope**: Resource entity, ownership (two nullable FKs + CHECK per AD-057, resolving AD-021's mechanism gap — `owningCardId`/`owningUserId`, uniform across all artifact types); the persisted processing-lifecycle state (`UPLOADED/PROCESSING/READY/FAILED`, per the File Processing spec) as real columns on the `Resource` row itself, not a separate versioned-history table; access control tied to Card/Course Space ownership.

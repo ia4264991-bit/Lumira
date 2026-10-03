@@ -1,6 +1,6 @@
 # Lumira — Domain Model
 
-**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-070.**
+**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-071.**
 This document consolidates already-frozen decisions into one coherent
 domain specification — it does not decide anything new. Where a mechanism
 is genuinely unresolved in `DECISIONS.md`, it is marked as such here, not
@@ -198,7 +198,7 @@ features, all expressed on the same `card` row and its related tables:
 ---
 ## 11. Ownership Transfer
 
-**AD-042 / AD-043 / AD-061 / AD-066**: the current Owner alone initiates one atomic transfer to a specific existing ACTIVE member. The target's ACTIVE membership is revalidated at completion in the same transaction. `card.owner_id` changes to the target; the target's role becomes OWNER; the previous Owner's role becomes ADMIN and their membership remains ACTIVE. Exactly one ACTIVE OWNER membership matches `card.owner_id` before and after. Emit `OWNERSHIP_TRANSFERRED`. The previous Owner may subsequently leave normally. No automatic/random assignment, transfer request, or multi-step workflow exists.
+**AD-042 / AD-043 / AD-061 / AD-066 / AD-071**: the current Owner alone initiates one atomic transfer to a specific existing ACTIVE member. The target's ACTIVE membership is revalidated at completion in the same transaction. `card.owner_id` changes to the target; the target's role becomes OWNER and its `memberCardId` becomes the Course Space Card ID. The target's former personal member Card remains owned by them but is no longer linked from that membership. The previous Owner's role becomes ADMIN and their membership remains ACTIVE; their `memberCardId` is changed to a newly created personal Card owned by them and initialized from the Course Space Card's current name and color. Their former Owner episode pointed to the shared Card and does not preserve a recoverable link to their former personal member Card. Exactly one ACTIVE OWNER membership matches `card.owner_id` before and after, and each membership's member Card remains owned by its user. Emit `OWNERSHIP_TRANSFERRED` in the same transaction. The previous Owner may subsequently leave normally. No automatic/random owner assignment, transfer request, or multi-step workflow exists.
 
 ---
 ## 12. Sharing and Share Records
