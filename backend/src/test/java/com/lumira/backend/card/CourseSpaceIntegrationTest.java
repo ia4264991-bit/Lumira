@@ -202,6 +202,95 @@ class CourseSpaceIntegrationTest extends BaseIntegrationTest {
         assertThat(getCard(adminId, cardId).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("ownership transfer relinks member Cards atomically and former Owner can leave and rejoin")
+    void ownershipTransferRelinksCardsAndSupportsFormerOwnerRejoin() {
+        enableSharing();
+        UUID targetInvitation = UUID.fromString((String) invite(ownerId, memberId).getBody().get("membershipId"));
+        assertThat(invitation(memberId, targetInvitation, "accept").getStatusCode()).isEqualTo(HttpStatus.OK);
+        UUID targetPersonalCardId = UUID.fromString(jdbcTemplate.queryForObject(
+                "select member_card_id from card_membership where id=?", String.class, targetInvitation));
+        assertOwnerInvariant(ownerId);
+
+        ResponseEntity<Map> transfer = transfer(ownerId, memberId);
+        assertThat(transfer.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(jdbcTemplate.queryForObject("select owner_id from card where id=?", String.class, cardId))
+                .isEqualTo(memberId.toString());
+        assertThat(jdbcTemplate.queryForObject(
+                "select role from card_membership where card_id=? and user_id=? and status='ACTIVE'", String.class, cardId, memberId))
+                .isEqualTo("OWNER");
+        assertThat(jdbcTemplate.queryForObject(
+                "select role from card_membership where card_id=? and user_id=? and status='ACTIVE'", String.class, cardId, ownerId))
+                .isEqualTo("ADMIN");
+
+        UUID formerOwnerCardId = UUID.fromString(jdbcTemplate.queryForObject(
+                "select member_card_id from card_membership where card_id=? and user_id=? and status='ACTIVE'",
+                String.class, cardId, ownerId));
+        assertThat(formerOwnerCardId).isNotEqualTo(cardId);
+        assertThat(jdbcTemplate.queryForObject("select owner_id from card where id=?", String.class, formerOwnerCardId))
+                .isEqualTo(ownerId.toString());
+        assertThat(jdbcTemplate.queryForObject("select name from card where id=?", String.class, formerOwnerCardId))
+                .isEqualTo("Course");
+        assertThat(jdbcTemplate.queryForObject(
+                "select member_card_id from card_membership where card_id=? and user_id=? and status='ACTIVE'",
+                String.class, cardId, memberId)).isEqualTo(cardId.toString());
+        assertThat(jdbcTemplate.queryForObject("select owner_id from card where id=?", String.class, targetPersonalCardId))
+                .isEqualTo(memberId.toString());
+        assertOwnerInvariant(memberId);
+        assertThat(count("select count(*) from course_space_event where card_id=? and type='OWNERSHIP_TRANSFERRED' and actor_user_id=?",
+                cardId, ownerId)).isEqualTo(1);
+
+        assertThat(rest("POST", ownerId, "/v1/cards/" + cardId + "/leave", null).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(jdbcTemplate.queryForObject(
+                "select status from card_membership where card_id=? and user_id=?", String.class, cardId, ownerId))
+                .isEqualTo("LEFT");
+        Map link = rest("POST", memberId, "/v1/cards/" + cardId + "/share-link", null).getBody();
+        ResponseEntity<Map> rejoin = rest("POST", ownerId, "/v1/join/" + link.get("shareToken"), null);
+        assertThat(rejoin.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(rejoin.getBody().get("id")).isEqualTo(formerOwnerCardId.toString());
+        assertThat(count("select count(*) from card where owner_id=?", ownerId)).isEqualTo(2);
+        assertThat(count("select count(*) from card_membership where card_id=? and user_id=? and status='ACTIVE'",
+                cardId, ownerId)).isEqualTo(1);
+        assertOwnerInvariant(memberId);
+    }
+
+    @Test
+    @DisplayName("only the Owner can transfer to another ACTIVE member and self-transfer is rejected")
+    void ownershipTransferAuthorizationAndTargetValidation() {
+        enableSharing();
+        UUID activeInvite = UUID.fromString((String) invite(ownerId, memberId).getBody().get("membershipId"));
+        assertThat(invitation(memberId, activeInvite, "accept").getStatusCode()).isEqualTo(HttpStatus.OK);
+        UUID pendingInvite = UUID.fromString((String) invite(ownerId, adminId).getBody().get("membershipId"));
+
+        assertThat(transfer(memberId, ownerId).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(transfer(ownerId, ownerId).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(transfer(ownerId, adminId).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(jdbcTemplate.queryForObject("select status from card_membership where id=?", String.class, pendingInvite))
+                .isEqualTo("INVITED");
+
+        Map link = rest("POST", ownerId, "/v1/cards/" + cardId + "/share-link", null).getBody();
+        assertThat(rest("POST", rejectId, "/v1/join/" + link.get("shareToken"), null).getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        assertThat(rest("POST", rejectId, "/v1/cards/" + cardId + "/leave", null).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(transfer(ownerId, rejectId).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertOwnerInvariant(ownerId);
+    }
+
+    private ResponseEntity<Map> transfer(UUID actor, UUID target) {
+        return rest("POST", actor, "/v1/cards/" + cardId + "/transfer-ownership", Map.of("targetUserId", target));
+    }
+
+    private void assertOwnerInvariant(UUID expectedOwnerId) {
+        assertThat(jdbcTemplate.queryForObject("select owner_id from card where id=?", String.class, cardId))
+                .isEqualTo(expectedOwnerId.toString());
+        assertThat(count("select count(*) from card_membership where card_id=? and status='ACTIVE' and role='OWNER'",
+                cardId)).isEqualTo(1);
+        assertThat(count("select count(*) from card_membership where card_id=? and status='ACTIVE' and role='OWNER' and user_id=? and member_card_id=?",
+                cardId, expectedOwnerId, cardId)).isEqualTo(1);
+    }
+
     private UUID addUser(String prefix) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update("insert into app_user(id,email,display_name) values (?,?,?)",
