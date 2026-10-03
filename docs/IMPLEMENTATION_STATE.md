@@ -9,17 +9,17 @@ correct without checking.
 
 ```
 CURRENT_PHASE: Backend Implementation
-CURRENT_MILESTONE: B7 - Flashcards
+CURRENT_MILESTONE: B8 - Events + Notifications
 STATUS: IN_PROGRESS
-LAST_COMPLETED_MILESTONE: B6 - Quizzes
-IN_PROGRESS: B7 implementation validated in the working tree; awaiting clean commit before milestone closure.
-NEXT_MILESTONE: B8 - Events + Notifications
-BLOCKERS: None known for B0-B6; B7 implementation is not yet committed.
-LAST_VALIDATED_COMMIT: 931dee50f4ee8c08114e09fdba27664dcf5e3409
-IMPLEMENTATION_COMMITS: B2 architecture clarification `7cddade`; ownership transfer `91eae6e`; transfer integration tests `82ecd3c`; B2 in-progress state `03ce622`; integrity-trigger migration and lifecycle assertion fix `b08dbb5`; B4 sharing and authorization `561c422fa294e792221fabe690e83498f3ea04b6`; B6 Quizzes `931dee50f4ee8c08114e09fdba27664dcf5e3409`.
-LAST_VALIDATION: 2026-10-03 - User-run `mvn clean test -DforkCount=1 -DreuseForks=false` from the backend directory completed with BUILD SUCCESS against PostgreSQL: 70 tests run, 0 failures, 0 errors, 0 skipped. This run included the uncommitted B7 working-tree implementation based on HEAD `1a62d523b9f74471cba9a7d7767cb3e408efdc43`; it does not constitute a clean committed B7 checkpoint.
+LAST_COMPLETED_MILESTONE: B7 - Flashcards
+IN_PROGRESS: B8 - Events + Notifications
+NEXT_MILESTONE: B9 - Sarah Foundation
+BLOCKERS: None known for B0-B7.
+LAST_VALIDATED_COMMIT: ceb0bb5518866dd2595be5bef17083f11c4ceec7
+IMPLEMENTATION_COMMITS: B2 architecture clarification `7cddade`; ownership transfer `91eae6e`; transfer integration tests `82ecd3c`; B2 in-progress state `03ce622`; integrity-trigger migration and lifecycle assertion fix `b08dbb5`; B4 sharing and authorization `561c422fa294e792221fabe690e83498f3ea04b6`; B6 Quizzes `931dee50f4ee8c08114e09fdba27664dcf5e3409`; B7 Flashcards `ceb0bb5518866dd2595be5bef17083f11c4ceec7`.
+LAST_VALIDATION: 2026-10-03 - User-run `mvn clean test -DforkCount=1 -DreuseForks=false` from the backend directory completed with BUILD SUCCESS against PostgreSQL: 70 tests run, 0 failures, 0 errors, 0 skipped. Validated B7 implementation committed as `ceb0bb5518866dd2595be5bef17083f11c4ceec7`.
 ARCHITECTURE_BLOCKER: None known for B2-B6. AD-071 (2026-10-03) additively resolves the AD-066/AD-067 transfer/memberCardId conflict. AD-072 clarifies physical owner column names without changing AD-057 semantics. AD-076 defines B5 Note/StudySet MVP fields and CRUD. AD-077 defines canonical MCQ Quiz content, private immutable attempts, answer snapshots, scoring, and API behavior.
-NOTES: B2 is complete; its validation source is `b08dbb5`, and closure documentation is committed at `2f6a2c1`. B3 Resources is implemented, PostgreSQL-validated, committed, and pushed at `680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`; the user-run suite reported 42 tests with no failures or errors. Direct invitations use INVITED membership episodes per AD-070; do not introduce PENDING as a membership status. The V5 migration fixes the row-type access defect in the deferred V4 owner/member-Card integrity trigger. B3 introduces no ResourceVersion/ContentVersion or asynchronous processing infrastructure. B4 sharing and authorization were implemented, PostgreSQL-validated with 55 passing tests, and committed at `561c422fa294e792221fabe690e83498f3ea04b6`; B4 closure documentation is at `91afb90a7d48816ee329b5b3809d2ce9c0793cdd`. B5 Notes + Study Sets are implemented under AD-076, PostgreSQL-validated with 60 passing tests, and committed at `4806efdff861e7a8eb009d58edb02abb3f413d73`; closure documentation is at `72d5c9d34339d617fae6d52f3f7eb02389a9a66a`. B6 Quizzes is complete under AD-077 at `931dee50f4ee8c08114e09fdba27664dcf5e3409`, validated by the 64-test PostgreSQL suite. AD-078 freezes the B7 MVP model in commit `1a62d523b9f74471cba9a7d7767cb3e408efdc43`. B7 working-tree implementation passed the user's full PostgreSQL suite (70/70); do not mark B7 complete until the implementation and state are committed as a clean checkpoint.
+NOTES: B2 is complete; its validation source is `b08dbb5`, and closure documentation is committed at `2f6a2c1`. B3 Resources is implemented, PostgreSQL-validated, committed, and pushed at `680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`; the user-run suite reported 42 tests with no failures or errors. Direct invitations use INVITED membership episodes per AD-070; do not introduce PENDING as a membership status. The V5 migration fixes the row-type access defect in the deferred V4 owner/member-Card integrity trigger. B3 introduces no ResourceVersion/ContentVersion or asynchronous processing infrastructure. B4 sharing and authorization were implemented, PostgreSQL-validated with 55 passing tests, and committed at `561c422fa294e792221fabe690e83498f3ea04b6`; B4 closure documentation is at `91afb90a7d48816ee329b5b3809d2ce9c0793cdd`. B5 Notes + Study Sets are implemented under AD-076, PostgreSQL-validated with 60 passing tests, and committed at `4806efdff861e7a8eb009d58edb02abb3f413d73`; closure documentation is at `72d5c9d34339d617fae6d52f3f7eb02389a9a66a`. B6 Quizzes is complete under AD-077 at `931dee50f4ee8c08114e09fdba27664dcf5e3409`, validated by the 64-test PostgreSQL suite. AD-078 freezes the B7 MVP model in commit `1a62d523b9f74471cba9a7d7767cb3e408efdc43`. B7 Flashcards was validated against PostgreSQL (70/70 tests) and committed as `ceb0bb5518866dd2595be5bef17083f11c4ceec7`; B8 Events + Notifications is now active.
 ```
 
 ---
@@ -56,7 +56,7 @@ it exists."**
 - [x] B4 — Sharing + Authorization (`561c422fa294e792221fabe690e83498f3ea04b6`; 55/55 PostgreSQL integration tests)
 - [x] B5 — Notes + Study Sets (`4806efdff861e7a8eb009d58edb02abb3f413d73`; 60/60 PostgreSQL integration tests)
 - [x] B6 — Quizzes (`931dee50f4ee8c08114e09fdba27664dcf5e3409`; 64/64 PostgreSQL integration tests)
-- [ ] B7 — Flashcards (active; user-run full PostgreSQL suite passed 70/70 on working tree; awaiting commit)
+- [x] B7 — Flashcards (`ceb0bb5518866dd2595be5bef17083f11c4ceec7`; 70/70 PostgreSQL integration tests)
 - [ ] B8 — Events + Notifications
 - [ ] B9 — Sarah Foundation
 - [ ] B10 — Sarah Generation
