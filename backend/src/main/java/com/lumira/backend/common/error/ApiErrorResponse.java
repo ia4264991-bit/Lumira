@@ -22,7 +22,7 @@ public record ApiErrorResponse(ErrorDetails error) {
     public record ErrorDetails(
             String code,
             String message,
-            List<FieldErrorDetail> details
+            Object details
     ) {}
 
     public record FieldErrorDetail(

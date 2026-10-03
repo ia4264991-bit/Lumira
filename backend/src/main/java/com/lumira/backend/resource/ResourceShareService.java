@@ -18,8 +18,8 @@ public class ResourceShareService {
 
     /** AD-022: resources become shared when the owning Card becomes a Course Space. */
     public void activateAllForCard(UUID cardId) {
-        for (Resource resource : resources.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId)) {
-            ResourceShare share = shares.findByResourceIdAndCardId(resource.getId(), cardId).orElse(null);
+        for (Resource resource : resources.findByOwnerCardIdForUpdateOrderById(cardId)) {
+            ResourceShare share = shares.findByResourceIdAndCardIdForUpdate(resource.getId(), cardId).orElse(null);
             if (share == null) shares.save(new ResourceShare(resource.getId(), cardId));
             else share.activate();
         }
@@ -27,6 +27,10 @@ public class ResourceShareService {
 
     /** AD-063: dissolution revokes Course-Space visibility while retaining Resources. */
     public void deactivateAllForCard(UUID cardId) {
-        shares.findByCardIdAndActiveTrue(cardId).forEach(ResourceShare::deactivate);
+        for (ResourceShare snapshot : shares.findByCardIdAndActiveTrueOrderByResourceIdAsc(cardId)) {
+            resources.findByIdForUpdate(snapshot.getResourceId()).ifPresent(resource ->
+                    shares.findByResourceIdAndCardIdForUpdate(resource.getId(), cardId)
+                            .filter(ResourceShare::isActive).ifPresent(ResourceShare::deactivate));
+        }
     }
 }

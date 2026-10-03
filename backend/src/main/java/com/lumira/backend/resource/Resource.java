@@ -72,6 +72,10 @@ public class Resource extends BaseEntity {
     public JsonNode getExtractedContent() { return extractedContent; }
     public JsonNode getImageMetadata() { return imageMetadata; }
 
+    public void transferOwnershipToCard(java.util.UUID cardId) {
+        this.owner = ArtifactOwner.forCard(Objects.requireNonNull(cardId));
+    }
+
     public void beginProcessing() {
         if (originalBytes == null) throw new IllegalStateException("Original file bytes are unavailable");
         status = ResourceStatus.PROCESSING;

@@ -33,7 +33,14 @@ public class GlobalExceptionHandler {
         if (ex instanceof ValidationException ve && !ve.getFieldErrors().isEmpty()) {
             details = ve.getFieldErrors();
         }
-        ApiErrorResponse body = new ApiErrorResponse(ex.getErrorCode().getValue(), ex.getMessage(), details);
+        ApiErrorResponse body;
+        if (ex instanceof AccountDeletionConflictException deletionConflict) {
+            body = new ApiErrorResponse(new ApiErrorResponse.ErrorDetails(
+                    ex.getErrorCode().getValue(), ex.getMessage(),
+                    java.util.Map.of("courseSpaceCardIds", deletionConflict.getCourseSpaceCardIds())));
+        } else {
+            body = new ApiErrorResponse(ex.getErrorCode().getValue(), ex.getMessage(), details);
+        }
         return ResponseEntity.status(ex.getHttpStatus()).body(body);
     }
 

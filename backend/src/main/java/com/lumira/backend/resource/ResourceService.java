@@ -2,13 +2,7 @@ package com.lumira.backend.resource;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lumira.backend.card.Card;
-import com.lumira.backend.card.CardMembership;
-import com.lumira.backend.card.CardMembershipRepository;
-import com.lumira.backend.card.CardRepository;
-import com.lumira.backend.card.MembershipRole;
-import com.lumira.backend.card.MembershipStatus;
 import com.lumira.backend.common.domain.ArtifactOwner;
-import com.lumira.backend.common.error.ForbiddenException;
 import com.lumira.backend.common.error.ResourceNotFoundException;
 import com.lumira.backend.user.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,29 +22,28 @@ import java.util.UUID;
 public class ResourceService {
     private final ResourceRepository resources;
     private final ResourceShareRepository shares;
-    private final CardRepository cards;
-    private final CardMembershipRepository memberships;
     private final UserRepository users;
+    private final ResourceAuthorizationService authorization;
     private final ResourceFileProcessor processor;
     private final ResourcePublicationService publication;
     private final ObjectMapper mapper;
     private final long maxUploadBytes;
 
-    public ResourceService(ResourceRepository resources, ResourceShareRepository shares, CardRepository cards,
-            CardMembershipRepository memberships, UserRepository users, ResourceFileProcessor processor,
+    public ResourceService(ResourceRepository resources, ResourceShareRepository shares,
+            UserRepository users, ResourceAuthorizationService authorization, ResourceFileProcessor processor,
             ResourcePublicationService publication, ObjectMapper mapper,
             @Value("${lumira.resource.max-upload-bytes:20971520}") long maxUploadBytes) {
         this.resources = resources;
         this.shares = shares;
-        this.cards = cards;
-        this.memberships = memberships;
         this.users = users;
+        this.authorization = authorization;
         this.processor = processor;
         this.publication = publication;
         this.mapper = mapper;
         this.maxUploadBytes = maxUploadBytes;
     }
 
+    @Transactional
     public ResourceResponse createForCard(UUID cardId, UUID actorId, MultipartFile file, String title) {
         Card card = cardForUpload(cardId, actorId);
         if (file == null || file.isEmpty()) throw new com.lumira.backend.common.error.ValidationException("A non-empty file is required");
@@ -70,8 +63,9 @@ public class ResourceService {
     }
 
     /** Internal domain path for resources not yet organized into a Card (AD-021). */
+    @Transactional
     public ResourceResponse createForUser(UUID userId, MultipartFile file, String title) {
-        if (!users.existsById(userId)) throw new ResourceNotFoundException("User not found");
+        if (users.findByIdForAuthorization(userId).isEmpty()) throw new ResourceNotFoundException("User not found");
         if (file == null || file.isEmpty()) throw new com.lumira.backend.common.error.ValidationException("A non-empty file is required");
         try {
             byte[] bytes = file.getBytes();
@@ -91,11 +85,15 @@ public class ResourceService {
 
     @Transactional(readOnly = true)
     public List<ResourceResponse> listForCard(UUID cardId, UUID actorId) {
-        Card card = cards.findById(cardId).orElseThrow(() -> new ResourceNotFoundException("Card not found"));
-        authorizeRead(card, actorId);
-        return resources.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId).stream()
-                .filter(r -> !card.isShared() || card.isOwnedBy(actorId)
-                        || shares.existsByResourceIdAndCardIdAndActiveTrue(r.getId(), cardId))
+        Card card = authorization.requireCardReadable(cardId, actorId);
+        if (!card.isShared()) {
+            return resources.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId).stream()
+                    .map(ResourceResponse::from).toList();
+        }
+        return shares.findByCardIdAndActiveTrueOrderByResourceIdAsc(cardId).stream()
+                .map(ResourceShare::getResourceId).map(resources::findById)
+                .flatMap(java.util.Optional::stream)
+                .sorted(java.util.Comparator.comparing(Resource::getCreatedAt).reversed())
                 .map(ResourceResponse::from).toList();
     }
 
@@ -121,6 +119,7 @@ public class ResourceService {
                 .body(resource.getOriginalBytes());
     }
 
+    @Transactional
     public ResourceResponse reprocess(UUID resourceId, UUID actorId) {
         Resource resource = resources.findById(resourceId).orElseThrow(() -> new ResourceNotFoundException("Resource not found"));
         authorizeOwner(resource, actorId);
@@ -151,53 +150,15 @@ public class ResourceService {
     }
 
     private Card cardForUpload(UUID cardId, UUID actorId) {
-        Card card = cards.findById(cardId).orElseThrow(() -> new ResourceNotFoundException("Card not found"));
-        if (!users.existsById(actorId)) throw new ResourceNotFoundException("Card not found");
-        if (!card.isShared()) {
-            if (!card.isOwnedBy(actorId)) throw new ResourceNotFoundException("Card not found");
-            return card;
-        }
-        CardMembership membership = memberships.findFirstByCardIdAndUserIdAndStatusIn(cardId, actorId,
-                        List.of(MembershipStatus.ACTIVE))
-                .orElseThrow(() -> new ResourceNotFoundException("Card not found"));
-        if (membership.getRole() != MembershipRole.OWNER && membership.getRole() != MembershipRole.ADMIN) {
-            throw new ForbiddenException("Owner or active Admin role is required to upload a Course Space Resource");
-        }
-        return card;
-    }
-
-    private void authorizeRead(Card card, UUID actorId) {
-        if (!users.existsById(actorId)) throw new ResourceNotFoundException("Resource not found");
-        if (!card.isShared()) {
-            if (!card.isOwnedBy(actorId)) throw new ResourceNotFoundException("Resource not found");
-            return;
-        }
-        boolean owner = card.isOwnedBy(actorId);
-        boolean member = memberships.existsByCardIdAndUserIdAndStatus(card.getId(), actorId, MembershipStatus.ACTIVE);
-        if (!owner && !member) throw new ResourceNotFoundException("Resource not found");
+        return authorization.requireCardUpload(cardId, actorId);
     }
 
     private void authorizeResourceRead(Resource resource, UUID actorId) {
-        if (resource.getOwner().isUserOwned()) {
-            if (!actorId.equals(resource.getOwner().getOwningUserId())) throw new ResourceNotFoundException("Resource not found");
-            return;
-        }
-        UUID ownerCardId = resource.getOwner().getOwningCardId();
-        if (cards.findByIdAndOwnerId(ownerCardId, actorId).isPresent()) return;
-        boolean sharedAccess = shares.findByResourceIdAndCardId(resource.getId(), ownerCardId)
-                .filter(ResourceShare::isActive).isPresent()
-                && cards.findById(ownerCardId).filter(Card::isShared).isPresent()
-                && memberships.existsByCardIdAndUserIdAndStatus(ownerCardId, actorId, MembershipStatus.ACTIVE);
-        if (!sharedAccess) throw new ResourceNotFoundException("Resource not found");
+        authorization.requireResourceReadable(resource, actorId);
     }
 
     private void authorizeOwner(Resource resource, UUID actorId) {
-        if (resource.getOwner().isUserOwned()) {
-            if (!actorId.equals(resource.getOwner().getOwningUserId())) throw new ResourceNotFoundException("Resource not found");
-            return;
-        }
-        if (cards.findByIdAndOwnerId(resource.getOwner().getOwningCardId(), actorId).isEmpty())
-            throw new ResourceNotFoundException("Resource not found");
+        authorization.requireResourceOwner(resource, actorId);
     }
 
     private String safeFilename(String original) {

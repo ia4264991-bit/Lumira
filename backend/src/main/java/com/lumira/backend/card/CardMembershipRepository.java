@@ -45,4 +45,6 @@ public interface CardMembershipRepository extends JpaRepository<CardMembership, 
 
     boolean existsByCardIdAndUserIdAndStatus(UUID cardId, UUID userId, MembershipStatus status);
 
+    long deleteByUserId(UUID userId);
+
 }

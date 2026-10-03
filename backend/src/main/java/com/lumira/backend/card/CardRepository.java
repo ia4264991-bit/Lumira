@@ -22,6 +22,10 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
 
     List<Card> findByOwnerIdOrderByCreatedAtDesc(UUID ownerId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Card c where c.ownerId = :ownerId order by c.id")
+    List<Card> findByOwnerIdForUpdateOrderById(@Param("ownerId") UUID ownerId);
+
     boolean existsByIdAndOwnerId(UUID id, UUID ownerId);
 
     Optional<Card> findByIdAndOwnerId(UUID id, UUID ownerId);
@@ -29,6 +33,10 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from Card c where c.id = :id")
     Optional<Card> findByIdForUpdate(@Param("id") UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select c from Card c where c.id = :id")
+    Optional<Card> findByIdForAuthorization(@Param("id") UUID id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Card> findByInviteToken(String inviteToken);

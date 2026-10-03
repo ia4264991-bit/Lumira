@@ -38,8 +38,10 @@ public class ResourcePublicationService {
 
     @Transactional
     public void completeUpload(Resource resource, UUID cardId, UUID actorId) {
-        resources.saveAndFlush(resource);
-        Card card = cards.findById(cardId).orElse(null);
+        Card card = cards.findByIdForUpdate(cardId).orElse(null);
+        Resource locked = resources.findByIdForUpdate(resource.getId()).orElse(null);
+        if (locked == null) throw new com.lumira.backend.common.error.ResourceNotFoundException("Resource not found");
+        locked = resources.saveAndFlush(resource);
         if (card == null || !card.isShared()) return;
         var membership = memberships.findFirstByCardIdAndUserIdAndStatusIn(cardId, actorId,
                 List.of(MembershipStatus.ACTIVE)).orElse(null);
@@ -47,14 +49,14 @@ public class ResourcePublicationService {
                 || (membership != null && membership.getRole() == MembershipRole.ADMIN);
         if (!canStillPublish) return;
 
-        ResourceShare share = shares.findByResourceIdAndCardId(resource.getId(), cardId).orElse(null);
-        if (share == null) shares.save(new ResourceShare(resource.getId(), cardId));
+        ResourceShare share = shares.findByResourceIdAndCardIdForUpdate(locked.getId(), cardId).orElse(null);
+        if (share == null) shares.save(new ResourceShare(locked.getId(), cardId));
         else if (!share.isActive()) {
             share.activate();
             shares.save(share);
         }
         events.save(new CourseSpaceEvent(cardId, "RESOURCE_ADDED", actorId,
-                mapper.valueToTree(Map.of("resourceId", resource.getId(), "title", resource.getTitle(),
-                        "status", resource.getStatus().name()))));
+                mapper.valueToTree(Map.of("resourceId", locked.getId(), "title", locked.getTitle(),
+                        "status", locked.getStatus().name()))));
     }
 }
