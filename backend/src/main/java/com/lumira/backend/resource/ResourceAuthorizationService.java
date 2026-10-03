@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.UUID;
 
-/** Live, persisted authorization policy shared by Resource and sharing operations (AD-041/056). */
+/** Live, persisted authorization policy shared by artifact and sharing operations (AD-041/056). */
 @Service
 public class ResourceAuthorizationService {
     private final ResourceShareRepository shares;

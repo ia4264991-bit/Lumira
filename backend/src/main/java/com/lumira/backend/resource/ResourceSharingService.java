@@ -14,6 +14,9 @@ import com.lumira.backend.study.Note;
 import com.lumira.backend.study.NoteRepository;
 import com.lumira.backend.study.StudySet;
 import com.lumira.backend.study.StudySetRepository;
+import com.lumira.backend.quiz.Quiz;
+import com.lumira.backend.quiz.QuizRepository;
+import com.lumira.backend.quiz.QuizResponseMapper;
 import com.lumira.backend.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Set;
 import java.util.UUID;
 
-/** Shared AD-045 lifecycle for every artifact type currently in B0-B5. */
+/** Shared AD-045 lifecycle for every artifact type currently in B0-B6. */
 @Service
 @Transactional
 public class ResourceSharingService {
@@ -31,6 +34,8 @@ public class ResourceSharingService {
     private final ResourceRepository resources;
     private final NoteRepository notes;
     private final StudySetRepository studySets;
+    private final QuizRepository quizzes;
+    private final QuizResponseMapper quizMapper;
     private final ResourceShareRepository shares;
     private final CardRepository cards;
     private final CourseSpaceEventRepository events;
@@ -39,11 +44,14 @@ public class ResourceSharingService {
     private final ObjectMapper mapper;
 
     public ResourceSharingService(ResourceRepository resources, NoteRepository notes, StudySetRepository studySets,
+            QuizRepository quizzes, QuizResponseMapper quizMapper,
             ResourceShareRepository shares, CardRepository cards, CourseSpaceEventRepository events,
             ResourceAuthorizationService authorization, UserRepository users, ObjectMapper mapper) {
         this.resources = resources;
         this.notes = notes;
         this.studySets = studySets;
+        this.quizzes = quizzes;
+        this.quizMapper = quizMapper;
         this.shares = shares;
         this.cards = cards;
         this.events = events;
@@ -79,7 +87,7 @@ public class ResourceSharingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Active share not found"));
         share.deactivate();
         emit(card, "CONTENT_UNSHARED", actorId, type, artifactId, owner, "UNSHARE", null, null);
-        return artifact(type, artifactId);
+        return artifact(type, artifactId, actorId);
     }
 
     public Object forceUnshare(ArtifactType type, UUID artifactId, UUID cardId, UUID actorId,
@@ -102,7 +110,7 @@ public class ResourceSharingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Active share not found"));
         share.deactivate();
         emit(card, "CONTENT_FORCE_UNSHARED", actorId, type, artifactId, owner, "FORCE_UNSHARE", reason, note);
-        return artifact(type, artifactId);
+        return artifact(type, artifactId, actorId);
     }
 
     public void createCardShareIfShared(ArtifactType type, UUID artifactId, UUID cardId, UUID actorId) {
@@ -132,14 +140,17 @@ public class ResourceSharingService {
             case RESOURCE -> resources.findByIdForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Artifact not found")).getOwner();
             case NOTE -> notes.findByIdForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Artifact not found")).getOwner();
             case STUDYSET -> studySets.findByIdForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Artifact not found")).getOwner();
+            case QUIZ -> quizzes.findByIdForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Artifact not found")).getOwner();
         };
     }
 
-    private Object artifact(ArtifactType type, UUID id) {
+    private Object artifact(ArtifactType type, UUID id, UUID actorId) {
         return switch (type) {
             case RESOURCE -> resources.findById(id).map(ResourceResponse::from).orElseThrow(() -> new ResourceNotFoundException("Artifact not found"));
             case NOTE -> notes.findById(id).map(com.lumira.backend.study.NoteResponse::from).orElseThrow(() -> new ResourceNotFoundException("Artifact not found"));
             case STUDYSET -> studySets.findById(id).map(com.lumira.backend.study.StudySetResponse::from).orElseThrow(() -> new ResourceNotFoundException("Artifact not found"));
+            case QUIZ -> quizzes.findById(id).map(quiz -> quizMapper.from(quiz, authorization.isOwner(quiz.getOwner(), actorId)))
+                    .orElseThrow(() -> new ResourceNotFoundException("Artifact not found"));
         };
     }
 
@@ -148,6 +159,7 @@ public class ResourceSharingService {
             case RESOURCE -> shares.findByResourceIdAndCardIdForUpdate(artifactId, cardId);
             case NOTE -> shares.findNoteShareForUpdate(artifactId, cardId);
             case STUDYSET -> shares.findStudySetShareForUpdate(artifactId, cardId);
+            case QUIZ -> shares.findQuizShareForUpdate(artifactId, cardId);
         };
     }
 

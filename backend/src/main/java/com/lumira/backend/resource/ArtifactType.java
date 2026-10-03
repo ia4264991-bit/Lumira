@@ -1,7 +1,7 @@
 package com.lumira.backend.resource;
 
 public enum ArtifactType {
-    RESOURCE("resource"), NOTE("note"), STUDYSET("studyset");
+    RESOURCE("resource"), NOTE("note"), STUDYSET("studyset"), QUIZ("quiz");
 
     private final String apiValue;
 

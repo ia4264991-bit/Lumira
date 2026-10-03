@@ -188,12 +188,12 @@ MVP, do not silently pull forward:**
 - **Exit criteria**: Notes and Study Sets obey the same persisted authorization and explicit share-record rules as Resources, use the existing sharing mechanism, and satisfy AD-076 without adding unapproved content structure.
 
 ### B6 — Quizzes
-- **Objective**: Quiz artifact + the canonical-vs-personal-state boundary (AD-053).
-- **Scope**: `Quiz` entity (canonical structure/content); **`QuizAttempt` as a separate per-user execution-state entity** — one user's attempt/answers/score against a specific Quiz, never mutating the Quiz itself; sharing via the B4 mechanism.
-- **Dependencies**: B1, B4, B5 (reuses the same sharing pattern).
-- **Deliverables**: `Quiz` + `QuizAttempt` entities (exact schema for attempt-to-content-version binding may remain minimal — AD-053 explicitly defers this detail); endpoints for creating a Quiz and recording an attempt.
-- **Tests/validation**: Two different users' attempts against the same shared Quiz never collide or leak into each other; editing the Quiz doesn't retroactively corrupt past attempts' meaning.
-- **Exit criteria**: A shared Quiz can be attempted independently by multiple Course Space members without their attempts becoming shared or visible to each other.
+- **Objective**: Canonical multiple-choice Quiz artifact + private per-user attempt state (AD-053/077).
+- **Scope**: One Quiz artifact with relational ordered questions/options and exactly one correct option per question; QuizAttempt with immutable submitted-answer snapshots and server-calculated raw score; generic B4 sharing and persisted authorization.
+- **Dependencies**: B1, B4, B5 (reuses the same ownership and sharing mechanisms).
+- **Deliverables**: Flyway migration; Quiz, QuizQuestion, QuizQuestionOption, QuizAttempt, and QuizAttemptAnswer persistence; create/list/get/update/delete Quiz endpoints; attempt submission and caller-only attempt listing.
+- **Tests/validation**: PostgreSQL CRUD and ownership/IDOR tests; atomic invalid Quiz rejection; private/shared/unshared access; two users' attempts isolated; server-side scoring; repeated attempts independent; Quiz edits preserve prior attempt snapshots; generic share lifecycle applies.
+- **Exit criteria**: Authorized Course Space members can attempt one shared canonical Quiz independently, while no attempt, answer, score, or answer key leaks to another user or shared reader.
 
 ### B7 — Flashcards
 - **Objective**: Flashcard Set artifact + personal progress boundary (AD-053).
@@ -460,7 +460,7 @@ I1 (ongoing, paired) → I2 (needs everything) → I3 → I4 → I5
 | AD-027, 028, 037, 038, 054, 058 | B9 |
 | AD-035, 036, 055, 059, 065 | B10 |
 | AD-049–052, 063 | B11, ADM-2, I2 |
-| AD-053 | B6, B7 |
+| AD-053, 077 | B6, B7 |
 
 Full text of every AD remains in `docs/DECISIONS.md` — this table is a
 pointer, not a duplicate.

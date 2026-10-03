@@ -37,7 +37,7 @@ not generic advice.
    tracker. Architecture completion is not implementation completion;
    this file tracks the latter only.
 6. **`API_CONTRACT.md`** — the authoritative network boundary, rebuilt
-   from AD-019–072 and the governing specification documents. Governs
+   from AD-019 onward and the governing specification documents. Governs
    REST shapes/authorization requirements at the API surface; does not
    govern domain architecture beyond what it derives from `DECISIONS.md`.
 7. **`CLAUDE_PROJECT_RULES.md`** (this file) — governs *how* any agent

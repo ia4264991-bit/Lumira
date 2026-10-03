@@ -15,6 +15,9 @@ import com.lumira.backend.study.Note;
 import com.lumira.backend.study.NoteRepository;
 import com.lumira.backend.study.StudySet;
 import com.lumira.backend.study.StudySetRepository;
+import com.lumira.backend.quiz.Quiz;
+import com.lumira.backend.quiz.QuizRepository;
+import com.lumira.backend.quiz.QuizAttemptRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,11 +35,14 @@ public class AccountDeletionService {
     private final ResourceShareRepository shares;
     private final NoteRepository notes;
     private final StudySetRepository studySets;
+    private final QuizRepository quizzes;
+    private final QuizAttemptRepository quizAttempts;
 
     public AccountDeletionService(UserRepository users, CardRepository cards,
             CardMembershipRepository memberships, CardJoinRequestRepository joinRequests,
             ResourceRepository resources, ResourceShareRepository shares,
-            NoteRepository notes, StudySetRepository studySets) {
+            NoteRepository notes, StudySetRepository studySets, QuizRepository quizzes,
+            QuizAttemptRepository quizAttempts) {
         this.users = users;
         this.cards = cards;
         this.memberships = memberships;
@@ -45,6 +51,8 @@ public class AccountDeletionService {
         this.shares = shares;
         this.notes = notes;
         this.studySets = studySets;
+        this.quizzes = quizzes;
+        this.quizAttempts = quizAttempts;
     }
 
     @Transactional
@@ -68,6 +76,7 @@ public class AccountDeletionService {
         List<UUID> candidateResourceIds = resources.findResourceIdsOwnedByUserOrTheirCards(userId);
         List<UUID> candidateNoteIds = notes.findIdsOwnedByUserOrCards(userId);
         List<UUID> candidateStudySetIds = studySets.findIdsOwnedByUserOrCards(userId);
+        List<UUID> candidateQuizIds = quizzes.findIdsOwnedByUserOrCards(userId);
         List<ResourceShare> observedShares = new java.util.ArrayList<>();
         if (!candidateResourceIds.isEmpty()) {
             observedShares.addAll(shares
@@ -75,6 +84,7 @@ public class AccountDeletionService {
         }
         if (!candidateNoteIds.isEmpty()) observedShares.addAll(shares.findByNoteIdInAndActiveTrueOrderByNoteIdAscCreatedAtAscIdAsc(candidateNoteIds));
         if (!candidateStudySetIds.isEmpty()) observedShares.addAll(shares.findByStudySetIdInAndActiveTrueOrderByStudySetIdAscCreatedAtAscIdAsc(candidateStudySetIds));
+        if (!candidateQuizIds.isEmpty()) observedShares.addAll(shares.findByQuizIdInAndActiveTrueOrderByQuizIdAscCreatedAtAscIdAsc(candidateQuizIds));
         List<UUID> sharedCardIds = observedShares.stream().map(ResourceShare::getCardId).distinct().sorted().toList();
         if (!sharedCardIds.isEmpty()) cards.findByIdInForUpdateOrderById(sharedCardIds);
 
@@ -111,15 +121,23 @@ public class AccountDeletionService {
             if (successor == null) studySets.delete(set);
             else { set.transferOwnershipToCard(successor.getId()); studySets.save(set); }
         }
+        for (Quiz quiz : quizzes.findOwnedByUserOrCardsForUpdate(userId)) {
+            List<ResourceShare> activeShares = shares.findByQuizIdAndActiveTrueOrderByCreatedAtAscIdAsc(quiz.getId());
+            Card successor = successorCard(activeShares);
+            if (successor == null) quizzes.delete(quiz);
+            else { quiz.transferOwnershipToCard(successor.getId()); quizzes.save(quiz); }
+        }
         resources.flush();
         notes.flush();
         studySets.flush();
+        quizzes.flush();
 
         List<UUID> ownedCardIds = ownedCards.stream().map(Card::getId).toList();
         joinRequests.deleteByRequestingUserId(userId);
         if (!ownedCardIds.isEmpty()) joinRequests.deleteByCardIdIn(ownedCardIds);
         joinRequests.clearResolverUser(userId);
         memberships.deleteByUserId(userId);
+        quizAttempts.deleteByUserId(userId);
         if (!ownedCardIds.isEmpty()) memberships.deleteByCardIdIn(ownedCardIds);
         cards.deleteAll(ownedCards);
         users.delete(user);

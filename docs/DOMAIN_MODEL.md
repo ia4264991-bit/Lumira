@@ -1,6 +1,6 @@
 # Lumira — Domain Model
 
-**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-076.**
+**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-077.**
 This document consolidates already-frozen decisions into one coherent
 domain specification — it does not decide anything new. Where a mechanism
 is genuinely unresolved in `DECISIONS.md`, it is marked as such here, not
@@ -311,9 +311,25 @@ Quiz (canonical)                    FlashcardSet (canonical)
 
 This does **not** reopen AD-030 — there is still exactly one `Quiz`
 regardless of context; only attempt/progress records are user-specific.
-**Exact schema (how an attempt binds to a specific content version, review
--state algorithm) is explicitly deferred** — only the boundary itself must
-exist before B6/B7 implementation begins.
+**AD-077 (B6 concrete Quiz model)** — `Quiz` is a canonical artifact using
+the AD-057 owner pair, title, description, timestamps, and relational
+ordered `QuizQuestion`/`QuizQuestionOption` rows. Questions/options have
+stable UUIDs; each Quiz has at least one question, each question has at
+least two ordered options, and exactly one is correct. Only the persisted
+artifact owner sees correctness in canonical Quiz reads; shared readers
+see the question and options without the answer key.
+
+`QuizAttempt` belongs to one Quiz and one User and is immutable. It stores
+the submitted answer and raw `correctCount`/`totalQuestions` score, plus a
+relational snapshot per question of the prompt and ordered options,
+including the selected and correct answer. A complete valid Quiz must be
+answered exactly once per question; the server calculates the score.
+Snapshots preserve attempt meaning across later Quiz edits without
+introducing artifact versions. Attempts are private to their User and are
+cascaded when the Quiz is deleted; account deletion also removes that
+User's attempts. Multiple attempts are independent. Full versioning,
+question banks, sections, timers, randomization, non-MCQ question types,
+and grading engines remain out of scope.
 
 ---
 
