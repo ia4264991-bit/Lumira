@@ -293,6 +293,36 @@ This single log serves two purposes from one source of truth:
   FK, `deliveredAt`, `readAt`) — a delivery/read-state **wrapper around an
   event**, never a freestanding fact.
 
+**AD-079 (additive recipient clarification)** — A notification has nullable
+`recipientMembershipId` and `recipientUserId` references. A database CHECK
+requires exactly one reference to be non-null. Membership recipients are
+resolved to their User through `card_membership`; direct-user recipients
+support users who have no eligible Course Space membership. Notifications
+always reference a persisted `CourseSpaceEvent` and are written with the
+causing action/event in one transaction. Event history remains independent
+of membership and notification lifecycle (AD-052).
+
+Recipient selection is event-specific and is evaluated from persisted state
+at event time. Broadcasts use ACTIVE memberships minus the actor, with an
+explicit affected-user exception and deduplication:
+
+| Event type | Recipients |
+| --- | --- |
+| `RESOURCE_ADDED`, `ARTIFACT_SHARED`, `MEMBER_JOINED`, `MEMBER_LEFT`, `ANNOUNCEMENT_POSTED`, `CONTENT_UNSHARED`, `COURSE_SPACE_DISSOLVED` | ACTIVE members except the actor |
+| `MEMBER_REMOVED` | ACTIVE members except the actor, plus the removed user's membership episode |
+| `MEMBER_PROMOTED`, `MEMBER_DEMOTED` | ACTIVE members except the actor, plus the affected user's membership episode |
+| `OWNERSHIP_TRANSFERRED` | ACTIVE members except the initiating former Owner, plus both former and new Owner membership episodes |
+| `MEMBER_INVITED`, `MEMBER_INVITATION_WITHDRAWN` | Invited user's membership episode only |
+| `MEMBER_INVITATION_ACCEPTED` | ACTIVE members except the accepting actor |
+| `MEMBER_INVITATION_DECLINED` | ACTIVE Owner/Admin memberships except the declining actor |
+| `CONTENT_FORCE_UNSHARED` | ACTIVE members except the actor, plus the artifact owner exactly once; use the owner's ACTIVE membership if present, otherwise `recipientUserId` |
+
+An affected membership episode may be INVITED, LEFT, or REMOVED when that
+event is recorded; the notification remains addressed to that episode's
+User. The artifact owner always receives `CONTENT_FORCE_UNSHARED`, including
+when the owner is the actor. Push delivery, preferences, and other delivery
+channels remain outside this model (AD-039).
+
 **AD-039** — This model is confirmed correct as designed; push-delivery
 mechanics (FCM or similar) are implementation detail, deferred, not a
 domain gap.

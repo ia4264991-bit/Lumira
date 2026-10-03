@@ -4,8 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.lumira.backend.card.Card;
 import com.lumira.backend.card.CardRepository;
-import com.lumira.backend.card.CourseSpaceEvent;
-import com.lumira.backend.card.CourseSpaceEventRepository;
+import com.lumira.backend.card.CourseSpaceEventService;
 import com.lumira.backend.card.MembershipRole;
 import com.lumira.backend.common.domain.ArtifactOwner;
 import com.lumira.backend.common.error.ResourceNotFoundException;
@@ -42,7 +41,7 @@ public class ResourceSharingService {
     private final FlashcardSetResponseMapper flashcardMapper;
     private final ResourceShareRepository shares;
     private final CardRepository cards;
-    private final CourseSpaceEventRepository events;
+    private final CourseSpaceEventService eventService;
     private final ResourceAuthorizationService authorization;
     private final UserRepository users;
     private final ObjectMapper mapper;
@@ -50,7 +49,7 @@ public class ResourceSharingService {
     public ResourceSharingService(ResourceRepository resources, NoteRepository notes, StudySetRepository studySets,
             QuizRepository quizzes, QuizResponseMapper quizMapper, FlashcardSetRepository flashcardSets,
             FlashcardSetResponseMapper flashcardMapper,
-            ResourceShareRepository shares, CardRepository cards, CourseSpaceEventRepository events,
+            ResourceShareRepository shares, CardRepository cards, CourseSpaceEventService eventService,
             ResourceAuthorizationService authorization, UserRepository users, ObjectMapper mapper) {
         this.resources = resources;
         this.notes = notes;
@@ -61,7 +60,7 @@ public class ResourceSharingService {
         this.flashcardMapper = flashcardMapper;
         this.shares = shares;
         this.cards = cards;
-        this.events = events;
+        this.eventService = eventService;
         this.authorization = authorization;
         this.users = users;
         this.mapper = mapper;
@@ -191,8 +190,8 @@ public class ResourceSharingService {
 
     private void emit(Card card, String eventType, UUID actorId, ArtifactType type, UUID id,
             ArtifactOwner owner, String operation, String reason, String note) {
-        events.save(new CourseSpaceEvent(card.getId(), eventType, actorId,
-                payload(type, id, owner, operation, reason, note)));
+        eventService.emit(card.getId(), eventType, actorId,
+                payload(type, id, owner, operation, reason, note));
     }
 
     public record ShareResult(ResourceShare share, boolean changed) { }

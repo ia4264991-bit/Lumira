@@ -1,11 +1,9 @@
 package com.lumira.backend.resource;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lumira.backend.card.Card;
 import com.lumira.backend.card.CardMembershipRepository;
 import com.lumira.backend.card.CardRepository;
-import com.lumira.backend.card.CourseSpaceEvent;
-import com.lumira.backend.card.CourseSpaceEventRepository;
+import com.lumira.backend.card.CourseSpaceEventService;
 import com.lumira.backend.card.MembershipRole;
 import com.lumira.backend.card.MembershipStatus;
 import org.springframework.stereotype.Service;
@@ -22,18 +20,15 @@ public class ResourcePublicationService {
     private final ResourceShareRepository shares;
     private final CardRepository cards;
     private final CardMembershipRepository memberships;
-    private final CourseSpaceEventRepository events;
-    private final ObjectMapper mapper;
+    private final CourseSpaceEventService eventService;
 
     public ResourcePublicationService(ResourceRepository resources, ResourceShareRepository shares,
-            CardRepository cards, CardMembershipRepository memberships, CourseSpaceEventRepository events,
-            ObjectMapper mapper) {
+            CardRepository cards, CardMembershipRepository memberships, CourseSpaceEventService eventService) {
         this.resources = resources;
         this.shares = shares;
         this.cards = cards;
         this.memberships = memberships;
-        this.events = events;
-        this.mapper = mapper;
+        this.eventService = eventService;
     }
 
     @Transactional
@@ -55,8 +50,8 @@ public class ResourcePublicationService {
             share.activate();
             shares.save(share);
         }
-        events.save(new CourseSpaceEvent(cardId, "RESOURCE_ADDED", actorId,
-                mapper.valueToTree(Map.of("resourceId", locked.getId(), "title", locked.getTitle(),
-                        "status", locked.getStatus().name()))));
+        eventService.emit(cardId, "RESOURCE_ADDED", actorId,
+                Map.of("resourceId", locked.getId(), "title", locked.getTitle(),
+                        "status", locked.getStatus().name()));
     }
 }

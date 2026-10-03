@@ -1,6 +1,5 @@
 package com.lumira.backend.card;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lumira.backend.common.error.ConflictException;
 import com.lumira.backend.common.error.ForbiddenException;
 import com.lumira.backend.common.error.GoneException;
@@ -31,8 +30,8 @@ public class CourseSpaceService {
     private final CardMembershipRepository membershipRepository;
     private final CardJoinRequestRepository joinRequestRepository;
     private final CourseSpaceEventRepository eventRepository;
+    private final CourseSpaceEventService eventService;
     private final UserRepository userRepository;
-    private final ObjectMapper objectMapper;
     private final EntityManager entityManager;
     private final ResourceShareService resourceShareService;
     private final String inviteBaseUrl;
@@ -41,8 +40,8 @@ public class CourseSpaceService {
                               CardMembershipRepository membershipRepository,
                               CardJoinRequestRepository joinRequestRepository,
                               CourseSpaceEventRepository eventRepository,
+                              CourseSpaceEventService eventService,
                               UserRepository userRepository,
-                              ObjectMapper objectMapper,
                               EntityManager entityManager,
                               ResourceShareService resourceShareService,
                               @Value("${lumira.invite.base-url:https://lumira.app}") String inviteBaseUrl) {
@@ -50,8 +49,8 @@ public class CourseSpaceService {
         this.membershipRepository = membershipRepository;
         this.joinRequestRepository = joinRequestRepository;
         this.eventRepository = eventRepository;
+        this.eventService = eventService;
         this.userRepository = userRepository;
-        this.objectMapper = objectMapper;
         this.entityManager = entityManager;
         this.resourceShareService = resourceShareService;
         this.inviteBaseUrl = inviteBaseUrl.replaceAll("/+$", "");
@@ -303,7 +302,7 @@ public class CourseSpaceService {
         CardMembership target = activeMembership(cardId, targetUserId);
         try { target.promote(); }
         catch (IllegalStateException ex) { throw new ConflictException(ex.getMessage()); }
-        emit(cardId, "MEMBER_PROMOTED", actorId, Map.of("userId", targetUserId));
+        emit(cardId, "MEMBER_PROMOTED", actorId, Map.of("userId", targetUserId, "membershipId", target.getId()));
         return target;
     }
 
@@ -313,7 +312,7 @@ public class CourseSpaceService {
         CardMembership target = activeMembership(cardId, targetUserId);
         try { target.demote(); }
         catch (IllegalStateException ex) { throw new ConflictException(ex.getMessage()); }
-        emit(cardId, "MEMBER_DEMOTED", actorId, Map.of("userId", targetUserId));
+        emit(cardId, "MEMBER_DEMOTED", actorId, Map.of("userId", targetUserId, "membershipId", target.getId()));
         return target;
     }
 
@@ -350,7 +349,8 @@ public class CourseSpaceService {
         newOwner.setRole(MembershipRole.OWNER);
         newOwner.setMemberCardId(cardId);
         emit(cardId, "OWNERSHIP_TRANSFERRED", actorId,
-                Map.of("fromUserId", actorId, "toUserId", targetUserId));
+                Map.of("fromUserId", actorId, "toUserId", targetUserId,
+                        "fromMembershipId", formerOwner.getId(), "toMembershipId", newOwner.getId()));
         return newOwner;
     }
 
@@ -361,7 +361,7 @@ public class CourseSpaceService {
         if (target.getRole() == MembershipRole.OWNER) throw new ForbiddenException("Owner cannot be removed");
         try { target.remove(); }
         catch (IllegalStateException ex) { throw new ConflictException(ex.getMessage()); }
-        emit(cardId, "MEMBER_REMOVED", actorId, Map.of("userId", targetUserId));
+        emit(cardId, "MEMBER_REMOVED", actorId, Map.of("userId", targetUserId, "membershipId", target.getId()));
         return target;
     }
 
@@ -490,7 +490,7 @@ public class CourseSpaceService {
     }
 
     private void emit(UUID cardId, String type, UUID actorId, Map<String, ?> payload) {
-        eventRepository.save(new CourseSpaceEvent(cardId, type, actorId, objectMapper.valueToTree(payload)));
+        eventService.emit(cardId, type, actorId, payload);
     }
 
 }

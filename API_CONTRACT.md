@@ -456,7 +456,7 @@ for the deleted card(s).
 
 ---
 
-## Events and Notifications (AD-026, AD-039)
+## Events and Notifications (AD-026, AD-039, AD-079)
 
 ```
 GET /v1/cards/{cardId}/events
@@ -474,6 +474,17 @@ PATCH /v1/notifications/{id}/read
   event (`eventId` field present on every notification) — never a
   freestanding fact. There is no endpoint to create a notification
   directly; they only ever arise as a side effect of an event.
+- 🔒 AD-079: each notification representation includes `id`, `eventId`,
+  event data (`cardId`, `type`, `createdAt`, `payload`),
+  `recipientMembershipId`, `recipientUserId`, `deliveredAt`, and `readAt`.
+  Exactly one of the two recipient references is non-null. The authenticated
+  user may list or mark read only notifications addressed to them, resolved
+  through the membership's `userId` or the direct `recipientUserId`.
+  Notification recipient policy is event-specific as documented in AD-079;
+  clients cannot create notifications or choose recipients.
+- `GET` returns an array of these representations. `PATCH .../read` takes no
+  body and returns the updated representation; repeating it leaves the first
+  `readAt` timestamp unchanged.
 - ⏸ Push delivery (FCM or similar) is explicitly deferred — this contract
   covers only in-app read/unread state.
 

@@ -722,6 +722,14 @@ closes the persistence-mechanism gap it explicitly left open.
 
 - **Revision note (2026-10-03)** — AD-078 additively resolves the B7 Flashcard content and review-outcome model deferred by AD-053. Historical meaning of AD-053 and existing ownership, sharing, and authorization decisions remains unchanged.
 
+- **AD-079 (additive clarification to AD-026/AD-046, 2026-10-03 — notification recipient rules)** — `CourseSpaceEvent` remains the single append-only source for both the Updates feed and notifications. A notification always references one existing event and is created in the same transaction as that event and the action that caused it. A notification has nullable `recipient_membership_id` and `recipient_user_id` references with a PostgreSQL CHECK requiring exactly one to be non-null. Membership recipients are resolved through `card_membership.user_id`; direct-user recipients use `recipient_user_id`. No generic recipient entity, join table, per-event notification model, or independent notification fact is introduced.
+
+  Recipient policy is selected by event type from live persisted state in the action transaction. For broadcast events, recipients are ACTIVE Course Space memberships at event time, excluding the actor. An explicitly affected user is also notified through their membership episode, even when that episode has just become LEFT, REMOVED, or INVITED; this exception does not create a duplicate if they are already in the broadcast set. `RESOURCE_ADDED`, `ARTIFACT_SHARED`, `MEMBER_JOINED`, `MEMBER_LEFT`, `ANNOUNCEMENT_POSTED`, `CONTENT_UNSHARED`, and `COURSE_SPACE_DISSOLVED` notify eligible ACTIVE members other than the actor. `MEMBER_REMOVED` also notifies the removed user's membership episode. `MEMBER_PROMOTED` and `MEMBER_DEMOTED` also notify the affected user's membership episode. `OWNERSHIP_TRANSFERRED` notifies the ACTIVE membership audience other than the initiating former Owner and explicitly notifies both former and new Owners through their membership episodes; the former Owner is included as an affected party despite being the actor. `MEMBER_INVITED` and `MEMBER_INVITATION_WITHDRAWN` notify only the invited user's membership episode. `MEMBER_INVITATION_ACCEPTED` notifies the eligible ACTIVE membership audience other than the accepting actor. `MEMBER_INVITATION_DECLINED` notifies ACTIVE Owner/Admin memberships other than the declining actor, because they administer Course Space invitations. These targeted policies do not imply notification for unlisted events or add new event types.
+
+  For `CONTENT_FORCE_UNSHARED`, AD-046's artifact-owner notification is mandatory. If the owner has an eligible ACTIVE membership in that Course Space, that single notification uses `recipient_membership_id`; otherwise it uses `recipient_user_id`, including when the owner has no membership or only a historical non-active membership. The owner receives exactly one notification even if they are also the force-unshare actor. Other eligible ACTIVE members are notified under the broadcast rule, excluding the actor and deduplicating the owner. Notification reads are authorized by resolving the recipient to the authenticated User; knowledge of event, artifact, Course Space, actor, or membership identifiers grants no access. This decision does not alter historical event retention under AD-052 or AD-026's event-log architecture.
+
+- **Revision note (2026-10-03)** — AD-079 additively resolves notification recipient representation and event-specific audience rules, including AD-046 force-unshare owner delivery, without changing AD-026's single event source or creating a second notification model.
+
 - **Revision note (2026-10-02)** — AD-066 and AD-067 add the previously
   unspecified transfer result and member-Card relationship without
   changing the historical wording of AD-042 or AD-033. AD-068 resolves
@@ -788,6 +796,9 @@ of the previous three passes did.
   transfer without changing AD-066 or AD-067's historical wording.
 - 2026-10-03 — AD-072 additively clarifies physical ownership column names
   for the shared mapping; AD-057's historical example and semantics remain.
+- 2026-10-03 — AD-079 additively defines mutually exclusive membership/user
+  notification recipients and event-specific notification audiences; the
+  AD-026 event-log model and AD-052 event-history behavior remain intact.
 
 - 2026-09-12 — AD-019 through AD-028 added: first formal architecture pass
   for the Card/Course Space/Sarah model, following the retirement of the

@@ -205,10 +205,10 @@ MVP, do not silently pull forward:**
 
 ### B8 — Events + Notifications
 - **Objective**: The single event-log model (AD-026) powering both the activity feed and notifications.
-- **Scope**: `CourseSpaceEvent` (open string `type`, seeded per AD-026 plus all additive extensions: `MEMBER_PROMOTED/DEMOTED`, `OWNERSHIP_TRANSFERRED`, `CONTENT_UNSHARED/FORCE_UNSHARED`, `COURSE_SPACE_DISSOLVED`); `notification` as a delivery/read-state wrapper around an event (AD-026) — never a freestanding fact; transactional consistency between the triggering action and its event (an event must never be recorded for an action that didn't actually happen, or vice versa).
+- **Scope**: `CourseSpaceEvent` (open string `type`, seeded per AD-026 plus additive membership/invitation/sharing extensions); `notification` as a delivery/read-state wrapper around an event (AD-026/039), with exactly one `recipientMembershipId` or `recipientUserId` (AD-079); event-specific persisted recipient policies, including force-unshare delivery to the artifact owner; transactional consistency between the triggering action, event, and derived notifications.
 - **Dependencies**: B2, B4 (most event types are emitted by Course Space/sharing actions already built there).
-- **Deliverables**: Event log table; notification table; a single emission path used by every action that needs to notify (not a separate ad hoc notification call site per feature).
-- **Tests/validation**: Every notification traces back to a real event; no code path creates a notification without one.
+- **Deliverables**: Existing append-only event log; notification table with PostgreSQL-enforced exactly-one-recipient invariant; one transactional event/notification emission path; event feed and authenticated notification list/read endpoints.
+- **Tests/validation**: PostgreSQL tests for event/notification atomicity, recipient integrity and event-specific policies, force-unshare owner delivery, IDOR protection, and event-history retention. Every notification traces back to a real event; no code path creates a notification without one.
 - **Exit criteria**: The Updates feed and per-member notifications are both provably derived from the same underlying log, not two systems that happen to agree today.
 
 ### B9 — Sarah Foundation
@@ -456,7 +456,7 @@ I1 (ongoing, paired) → I2 (needs everything) → I3 → I4 → I5
 | AD-023, 032, 034, 042, 043, 061, 066, 068 | B2 |
 | AD-024, 062, 069 | B2 |
 | AD-040, 041, 044, 045, 046, 047, 056 | B4, B11, I3 |
-| AD-026 (+ additive event types), 063 | B8 |
+| AD-026, 039, 063, 079 (+ additive event types) | B8 |
 | AD-027, 028, 037, 038, 054, 058 | B9 |
 | AD-035, 036, 055, 059, 065 | B10 |
 | AD-049–052, 063 | B11, ADM-2, I2 |
