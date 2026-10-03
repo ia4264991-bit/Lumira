@@ -9,17 +9,17 @@ correct without checking.
 
 ```
 CURRENT_PHASE: Backend Implementation
-CURRENT_MILESTONE: B8 - Events + Notifications
+CURRENT_MILESTONE: B9 - Sarah Foundation
 STATUS: IN_PROGRESS
-LAST_COMPLETED_MILESTONE: B7 - Flashcards
-IN_PROGRESS: B8 - Events + Notifications
-NEXT_MILESTONE: B9 - Sarah Foundation
-BLOCKERS: None known for B0-B7.
-LAST_VALIDATED_COMMIT: ceb0bb5518866dd2595be5bef17083f11c4ceec7
-IMPLEMENTATION_COMMITS: B2 architecture clarification `7cddade`; ownership transfer `91eae6e`; transfer integration tests `82ecd3c`; B2 in-progress state `03ce622`; integrity-trigger migration and lifecycle assertion fix `b08dbb5`; B4 sharing and authorization `561c422fa294e792221fabe690e83498f3ea04b6`; B6 Quizzes `931dee50f4ee8c08114e09fdba27664dcf5e3409`; B7 Flashcards `ceb0bb5518866dd2595be5bef17083f11c4ceec7`.
-LAST_VALIDATION: 2026-10-03 - User-run `mvn clean test -DforkCount=1 -DreuseForks=false` from the backend directory completed with BUILD SUCCESS against PostgreSQL: 79 tests run, 0 failures, 0 errors, 0 skipped. This validates the current B8 working-tree changes; no B8 validation commit exists yet.
-ARCHITECTURE_BLOCKER: B8 notification-recipient conflict resolved before implementation by additive AD-079 (2026-10-03): exactly one membership/user recipient reference and event-specific audience policies, including non-member artifact-owner delivery on force-unshare. No known B8 architecture blocker remains.
-NOTES: B2 is complete; its validation source is `b08dbb5`, and closure documentation is committed at `2f6a2c1`. B3 Resources is implemented, PostgreSQL-validated, committed, and pushed at `680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`; the user-run suite reported 42 tests with no failures or errors. Direct invitations use INVITED membership episodes per AD-070; do not introduce PENDING as a membership status. The V5 migration fixes the row-type access defect in the deferred V4 owner/member-Card integrity trigger. B3 introduces no ResourceVersion/ContentVersion or asynchronous processing infrastructure. B4 sharing and authorization were implemented, PostgreSQL-validated with 55 passing tests, and committed at `561c422fa294e792221fabe690e83498f3ea04b6`; B4 closure documentation is at `91afb90a7d48816ee329b5b3809d2ce9c0793cdd`. B5 Notes + Study Sets are implemented under AD-076, PostgreSQL-validated with 60 passing tests, and committed at `4806efdff861e7a8eb009d58edb02abb3f413d73`; closure documentation is at `72d5c9d34339d617fae6d52f3f7eb02389a9a66a`. B6 Quizzes is complete under AD-077 at `931dee50f4ee8c08114e09fdba27664dcf5e3409`, validated by the 64-test PostgreSQL suite. AD-078 freezes the B7 MVP model in commit `1a62d523b9f74471cba9a7d7767cb3e408efdc43`. B7 Flashcards was validated against PostgreSQL (70/70 tests) and committed as `ceb0bb5518866dd2595be5bef17083f11c4ceec7`. AD-079 freezes B8's notification recipient references and event-specific policies. B8's PostgreSQL suite passed 79/79 on 2026-10-03; implementation/state changes remain uncommitted pending review and commit.
+LAST_COMPLETED_MILESTONE: B8 - Events + Notifications
+IN_PROGRESS: B9 - Sarah Foundation
+NEXT_MILESTONE: B10 - Sarah Generation
+BLOCKERS: None known for B0-B8.
+LAST_VALIDATED_COMMIT: 1076477461e469f22c5dff68187e6d59d0201c7b
+IMPLEMENTATION_COMMITS: B2 architecture clarification `7cddade`; ownership transfer `91eae6e`; transfer integration tests `82ecd3c`; B2 in-progress state `03ce622`; integrity-trigger migration and lifecycle assertion fix `b08dbb5`; B4 sharing and authorization `561c422fa294e792221fabe690e83498f3ea04b6`; B6 Quizzes `931dee50f4ee8c08114e09fdba27664dcf5e3409`; B7 Flashcards `ceb0bb5518866dd2595be5bef17083f11c4ceec7`; B8 Events + Notifications `1076477461e469f22c5dff68187e6d59d0201c7`.
+LAST_VALIDATION: 2026-10-03 - User-run `mvn clean test -DforkCount=1 -DreuseForks=false` from the backend directory completed with BUILD SUCCESS against PostgreSQL: 79 tests run, 0 failures, 0 errors, 0 skipped. Validated B8 commit `1076477461e469f22c5dff68187e6d59d0201c7`.
+ARCHITECTURE_BLOCKER: None known for B2-B8. B8 notification-recipient conflict resolved before implementation by additive AD-079 (2026-10-03): exactly one membership/user recipient reference and event-specific audience policies, including non-member artifact-owner delivery on force-unshare.
+NOTES: B2 is complete; its validation source is `b08dbb5`, and closure documentation is committed at `2f6a2c1`. B3 Resources is implemented, PostgreSQL-validated, committed, and pushed at `680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`; the user-run suite reported 42 tests with no failures or errors. Direct invitations use INVITED membership episodes per AD-070; do not introduce PENDING as a membership status. The V5 migration fixes the row-type access defect in the deferred V4 owner/member-Card integrity trigger. B3 introduces no ResourceVersion/ContentVersion or asynchronous processing infrastructure. B4 sharing and authorization were implemented, PostgreSQL-validated with 55 passing tests, and committed at `561c422fa294e792221fabe690e83498f3ea04b6`; B4 closure documentation is at `91afb90a7d48816ee329b5b3809d2ce9c0793cdd`. B5 Notes + Study Sets are implemented under AD-076, PostgreSQL-validated with 60 passing tests, and committed at `4806efdff861e7a8eb009d58edb02abb3f413d73`; closure documentation is at `72d5c9d34339d617fae6d52f3f7eb02389a9a66a`. B6 Quizzes is complete under AD-077 at `931dee50f4ee8c08114e09fdba27664dcf5e3409`, validated by the 64-test PostgreSQL suite. AD-078 freezes the B7 MVP model in commit `1a62d523b9f74471cba9a7d7767cb3e408efdc43`. B7 Flashcards was validated against PostgreSQL (70/70 tests) and committed as `ceb0bb5518866dd2595be5bef17083f11c4ceec7`. AD-079 freezes B8's notification recipient references and event-specific policies. B8 was validated against PostgreSQL (79/79 tests) and committed as `1076477461e469f22c5dff68187e6d59d0201c7b`.
 ```
 
 ---
@@ -57,7 +57,7 @@ it exists."**
 - [x] B5 — Notes + Study Sets (`4806efdff861e7a8eb009d58edb02abb3f413d73`; 60/60 PostgreSQL integration tests)
 - [x] B6 — Quizzes (`931dee50f4ee8c08114e09fdba27664dcf5e3409`; 64/64 PostgreSQL integration tests)
 - [x] B7 — Flashcards (`ceb0bb5518866dd2595be5bef17083f11c4ceec7`; 70/70 PostgreSQL integration tests)
-- [ ] B8 — Events + Notifications
+- [x] B8 — Events + Notifications (`1076477461e469f22c5dff68187e6d59d0201c7b`; 79/79 PostgreSQL integration tests)
 - [ ] B9 — Sarah Foundation
 - [ ] B10 — Sarah Generation
 - [ ] B11 — Backend Integration + Security
