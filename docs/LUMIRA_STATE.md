@@ -28,7 +28,7 @@ in `docs/DECISIONS.md` (AD-019 onward), consolidated in
 
 | Area | Status |
 |---|---|
-| Backend | Committed HEAD is `72d5c9d34339d617fae6d52f3f7eb02389a9a66a`. B0-B5 are committed. The B6 working tree passed PostgreSQL validation: 64 tests, 0 failures, 0 errors, 0 skipped; B6 is not yet committed. |
+| Backend | B0-B6 are committed. B6 Quizzes is at `931dee50f4ee8c08114e09fdba27664dcf5e3409` and passed PostgreSQL validation: 64 tests, 0 failures, 0 errors, 0 skipped. |
 | Architecture | AD-066 through AD-077 define transfer, membership, sharing, deterministic account-deletion ownership succession, Notes/Study Sets, and the canonical Quiz/personal QuizAttempt model. B6 reuses AD-057 ownership and AD-045 sharing. |
 | Frontend | Working Kotlin/Compose PDF-reader/auth/chat thin client; it predates the Card/Course Space pivot. See `frontend/README.md`. |
 | API contract | Live and authoritative at the network boundary; B2-B6 endpoint contracts are maintained in `API_CONTRACT.md`. |
@@ -38,7 +38,7 @@ in `docs/DECISIONS.md` (AD-019 onward), consolidated in
 
 1. B4 Sharing + Authorization is complete at `91afb90a7d48816ee329b5b3809d2ce9c0793cdd` after the 55-test PostgreSQL suite passed.
 2. B5 Notes + Study Sets is complete at `4806efdff861e7a8eb009d58edb02abb3f413d73` after the 60-test PostgreSQL suite passed; its completion record is `72d5c9d34339d617fae6d52f3f7eb02389a9a66a`.
-3. B6 Quizzes is implemented under AD-077 and passed the full PostgreSQL suite (64 tests, 0 failures, 0 errors, 0 skipped); its changes and validation-state update are awaiting commit.
+3. B6 Quizzes is complete under AD-077 at `931dee50f4ee8c08114e09fdba27664dcf5e3409` after the 64-test PostgreSQL suite passed. B7 Flashcards is next.
 ## Three-way collaboration structure
 
 Unchanged by this retirement — this is a workflow pattern, not part of the
