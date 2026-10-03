@@ -10,12 +10,12 @@ correct without checking.
 ```
 CURRENT_PHASE: Backend Implementation
 CURRENT_MILESTONE: B4 - Sharing + Authorization
-STATUS: B3_COMPLETE
-LAST_COMPLETED_MILESTONE: B3 - Resources (`680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`)
-IN_PROGRESS: None
-NEXT_MILESTONE: B4 - Sharing + Authorization
-BLOCKERS: None for B3.
-LAST_VALIDATED_COMMIT: b08dbb53a634a626d4606ad244af7041d778e911
+STATUS: IN_PROGRESS
+LAST_COMPLETED_MILESTONE: B3 - Resources
+IN_PROGRESS: B4 - Sharing + Authorization
+NEXT_MILESTONE: B5 - Notes + Study Sets
+BLOCKERS: None for B3/B4.
+LAST_VALIDATED_COMMIT: 680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1
 IMPLEMENTATION_COMMITS: B2 architecture clarification `7cddade`; ownership transfer `91eae6e`; transfer integration tests `82ecd3c`; B2 in-progress state `03ce622`; integrity-trigger migration and lifecycle assertion fix `b08dbb5`.
 LAST_VALIDATION: 2026-10-03 - User-run `mvn clean test -DforkCount=1 -DreuseForks=false` from the backend directory completed with BUILD SUCCESS: 42 tests run, 0 failures, 0 errors, 0 skipped, against the configured PostgreSQL integration database. Validated and pushed B3 source commit: `680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`.
 ARCHITECTURE_BLOCKER: None for B2 or B3. AD-071 (2026-10-03) additively resolves the AD-066/AD-067 transfer/memberCardId conflict. AD-072 clarifies the physical owner column names without changing AD-057 semantics.
@@ -53,7 +53,7 @@ it exists."**
 - [x] B1 — Identity + Personal Cards
 - [x] B2 — Course Spaces (`b08dbb53a634a626d4606ad244af7041d778e911`; 33/33 PostgreSQL integration tests)
 - [x] B3 — Resources (`680e7ebfd3ef4cdac39dc05dcc3fdf41c72ffdf1`; 42/42 PostgreSQL integration tests)
-- [ ] B4 — Sharing + Authorization
+- [ ] B4 — Sharing + Authorization (active milestone)
 - [ ] B5 — Notes + Study Sets
 - [ ] B6 — Quizzes
 - [ ] B7 — Flashcards
