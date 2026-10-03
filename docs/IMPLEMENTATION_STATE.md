@@ -9,17 +9,17 @@ correct without checking.
 
 ```
 CURRENT_PHASE: Backend Implementation
-CURRENT_MILESTONE: B2 - Course Spaces
+CURRENT_MILESTONE: B3 - Resources
 STATUS: IN_PROGRESS
-LAST_COMPLETED_MILESTONE: B1 - Identity + Personal Cards
-IN_PROGRESS: B2 ownership transfer, PostgreSQL integration coverage, and full-suite verification
-NEXT_MILESTONE: Complete B2 - Course Spaces
-BLOCKERS: Full Maven validation is blocked in this Windows sandbox: `javac` throws `java.nio.file.AccessDeniedException` in `ZipFileSystemProvider.removeFileSystem` while closing a dependency JAR (`micrometer-commons-1.13.4.jar` / `jackson-dataformat-toml-2.17.2.jar`). Reproduced with Java 21, 24, and 25, with Maven caches in `%USERPROFILE%\.m2`, `%TEMP%`, and a writable workspace folder, and with `-DforkCount=1 -DreuseForks=false`; no tests ran. No leftover Maven/Java process was found. Sysinternals Handle was not installed and its download failed with a PowerShell TLS connection-close error; Resource Monitor inspection was unavailable because the Windows UI helper failed to write kernel assets. The project is outside OneDrive. Defender preference query returned Access Denied; automatic approval review rejected adding exclusions because it weakens system security. Docker is absent and no WSL distribution is installed. PostgreSQL 18.3 service is running and accepting connections on localhost:5432.
-LAST_VALIDATED_COMMIT: fa4134e86fa94ffa6056ae147c32aa339435bb4b (B1 validation commit; see LAST_VALIDATION)
-IMPLEMENTATION_COMMITS: AD-071 docs `7cddade`; ownership transfer `91eae6e`; transfer integration tests `82ecd3c` (local, not yet pushed; unvalidated)
-LAST_VALIDATION: 2026-10-03 - `mvn clean test -DforkCount=1 -DreuseForks=false` failed during main-source compilation while javac closed a dependency JAR; Surefire/test phase was not reached (0 tests executed). Reproduced with JDK 21/24/25 and alternate local Maven cache paths. Prior B1 validation: user-provided external Maven output on 2026-10-02 reports BUILD SUCCESS, 27 tests passing on PostgreSQL 18.3, with three Flyway migrations validated and V3 applied; this does not validate B2 or current HEAD.
-ARCHITECTURE_BLOCKER: None. AD-071 (2026-10-03) additively resolves the AD-066/AD-067 transfer/memberCardId conflict; implementation and real PostgreSQL validation remain outstanding.
-NOTES: Direct invitations use INVITED membership episodes per AD-070; do not introduce PENDING as a membership status. Transfer implementation and PostgreSQL integration tests are committed locally but unverified. Preserve the deferred V4 owner/member-Card trigger. B2 remains IN_PROGRESS until its full real PostgreSQL suite passes.
+LAST_COMPLETED_MILESTONE: B2 - Course Spaces
+IN_PROGRESS: B3 Resources - architecture and code inspection
+NEXT_MILESTONE: Complete B3 - Resources
+BLOCKERS: None for B2. B3 implementation is gated on the frozen ADs, API contract, and Resource/File Processing specification.
+LAST_VALIDATED_COMMIT: b08dbb53a634a626d4606ad244af7041d778e911
+IMPLEMENTATION_COMMITS: B2 architecture clarification `7cddade`; ownership transfer `91eae6e`; transfer integration tests `82ecd3c`; B2 in-progress state `03ce622`; integrity-trigger migration and lifecycle assertion fix `b08dbb5`.
+LAST_VALIDATION: 2026-10-03 - User-run `mvn clean test -DforkCount=1 -DreuseForks=false` from the backend directory completed with BUILD SUCCESS: 33 tests run, 0 failures, 0 errors, 0 skipped, against the configured PostgreSQL 18.3 integration database. Validated source commit: `b08dbb53a634a626d4606ad244af7041d778e911`; the validation/state documentation commit is not part of the tested source.
+ARCHITECTURE_BLOCKER: None for B2. AD-071 (2026-10-03) additively resolves the AD-066/AD-067 transfer/memberCardId conflict.
+NOTES: B2 is complete at `b08dbb5`. Direct invitations use INVITED membership episodes per AD-070; do not introduce PENDING as a membership status. The V5 migration fixes the row-type access defect in the deferred V4 owner/member-Card integrity trigger. B3 must follow AD-021/057/064, the API contract, and `docs/RESOURCE_FILE_PROCESSING_SPEC.md`; no ResourceVersion/ContentVersion or asynchronous processing infrastructure.
 ```
 
 ---
@@ -51,7 +51,7 @@ it exists."**
 
 - [x] B0 — Infrastructure/Foundation
 - [x] B1 — Identity + Personal Cards
-- [ ] B2 — Course Spaces
+- [x] B2 — Course Spaces (`b08dbb53a634a626d4606ad244af7041d778e911`; 33/33 PostgreSQL integration tests)
 - [ ] B3 — Resources
 - [ ] B4 — Sharing + Authorization
 - [ ] B5 — Notes + Study Sets

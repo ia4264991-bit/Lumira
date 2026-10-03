@@ -28,17 +28,16 @@ in `docs/DECISIONS.md` (AD-019 through AD-071), consolidated in
 
 | Area | Status |
 |---|---|
-| Backend | `origin/master` is `976615b`; it contains B0/B1 and the initial B2 lifecycle implementation. Prior user-provided output reports 27/27 B1 tests passing on PostgreSQL 18.3. This session has added AD-071 and transfer code/tests locally; Maven has not reached the test phase because javac fails with `AccessDeniedException` closing a dependency JAR. |
-| Architecture | AD-066 through AD-071 define transfer, member-Card linkage, removal, join requests, direct invitations, and transfer-time member Card relinking. The transfer architecture blocker is resolved by AD-071. |
+| Backend | `origin/master` is `b08dbb53a634a626d4606ad244af7041d778e911`. B0, B1, and B2 are present. User-run `mvn clean test -DforkCount=1 -DreuseForks=false` completed successfully against PostgreSQL 18.3: 33 tests, 0 failures, 0 errors, 0 skipped. B2 is closed; B3 Resources is next. |
+| Architecture | AD-066 through AD-071 define transfer, member-Card linkage, removal, join requests, direct invitations, and transfer-time member Card relinking. B2 architecture and implementation are validated at `b08dbb5`. |
 | Frontend | Working Kotlin/Compose PDF-reader/auth/chat thin client; it predates the Card/Course Space pivot. See `frontend/README.md`. |
-| API contract | Live and authoritative at the network boundary; B2 sections extended through AD-071. |
+| API contract | Live and authoritative at the network boundary; B2 sections extended through AD-071, and the B3 Resource endpoint surface is defined. |
 | UX prototype | Standalone HTML/CSS/JS artifact exists outside this repository; it remains the product reference. |
 
 ## What's next
 
-1. Resolve the Windows javac/JAR `AccessDeniedException` and run the full suite against PostgreSQL.
-2. Fix any compile/test failures, then record actual B2 validation.
-3. Commit and push the transfer implementation with honest in-progress state if validation remains blocked; do not mark B2 complete until the full suite passes.
+1. B2 is complete at `b08dbb53a634a626d4606ad244af7041d778e911` after the 33-test PostgreSQL suite passed.
+2. Begin B3 Resources by following `docs/IMPLEMENTATION_PLAN.md`, `API_CONTRACT.md`, and `docs/RESOURCE_FILE_PROCESSING_SPEC.md` exactly.
 ## Three-way collaboration structure
 
 Unchanged by this retirement — this is a workflow pattern, not part of the
