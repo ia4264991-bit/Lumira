@@ -1,6 +1,6 @@
 # Lumira — Domain Model
 
-**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-081.**
+**Derived exclusively from `docs/DECISIONS.md` AD-019 through AD-082.**
 This document consolidates already-frozen decisions into one coherent
 domain specification — it does not decide anything new. Where a mechanism
 is genuinely unresolved in `DECISIONS.md`, it is marked as such here, not
@@ -51,14 +51,31 @@ this document.
 
 ## 3. Identity Model
 
-**Deferred — not yet specified.** No AD defines a full `User`/identity
-model. What's referenced elsewhere: a `User` exists as an ownership target
-(AD-021's "or directly to a User" branch) and as `card.ownerId` (AD-019).
-No AD specifies authentication mechanism, session/token architecture, or
-account lifecycle beyond deletion semantics (§14 below). Per
-`IMPLEMENTATION_PLAN.md`'s B1, only the minimal boundary needed to
-attribute a Card to a user is currently in scope — a full identity/auth
-model is explicitly deferred, not decided here.
+**AD-082 — Firebase Authentication and Vision identity mapping.** Firebase
+Authentication is Vision's authentication provider. Android obtains a
+Firebase ID token through the Firebase Authentication SDK and sends it over
+HTTPS in the Bearer header. The backend verifies the token with the Firebase
+Admin SDK, obtains its Firebase UID, and resolves a persisted, unique
+one-to-one mapping to the internal `app_user.id`. Email is profile data,
+not an identity or account-linking key. The caller principal remains
+`AuthenticatedUser(UUID userId)`; Firebase-specific identity handling ends
+at `TokenResolver`.
+
+Authentication does not establish domain authorization. Live PostgreSQL
+state remains authoritative under AD-056. Firebase claims do not decide
+Card ownership, Course Space membership or roles, artifact ownership,
+sharing, or Sarah access. A Firebase UID without a persisted mapping is
+rejected; it is not auto-provisioned or linked by email. A trusted
+onboarding/provisioning flow, including safe linking of existing unmapped
+accounts, remains deferred because the current `app_user` lifecycle has no
+production creation path. The existing email/password sign-in UI is
+preserved as the current provider requirement; other Firebase sign-in
+methods remain deferred.
+
+Vision account deletion keeps AD-049–052's domain-data rules and must also
+remove or disable the corresponding Firebase identity on successful
+deletion. Ordering and recovery across the database and Firebase remain
+implementation details.
 
 ---
 
@@ -546,8 +563,9 @@ AD-044 are all specific instances of — it replaces none of them.
 Marked here so no implementation agent infers a decision that hasn't been
 made:
 
-- Full Identity/authentication model (§3) — only a minimal boundary is in
-  scope for B1.
+- Trusted onboarding/provisioning for mapping new Firebase UIDs and safely
+  linking existing `app_user` rows remains deferred under AD-082. Firebase
+  Authentication itself and the UID-to-`app_user.id` boundary are decided.
 - Exact `QuizAttempt`/flashcard-progress schema (§14).
 - Offline/download capability (`DECISIONS.md`'s standing extension point).
 - Resource/File Processing specification (file types, MIME validation,

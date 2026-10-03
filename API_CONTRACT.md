@@ -23,8 +23,8 @@ contract, not a new decision. Every endpoint below is tagged:
 
 - Base path: `/v1/`.
 - IDs: UUID, as strings in JSON.
-- Auth header: `Authorization: Bearer <token>` — see **Identity** below for
-  what's actually decided about the token itself (not much, deliberately).
+- Auth header: `Authorization: Bearer <Firebase ID token>` over HTTPS — see
+  **Identity** below for server verification and Vision identity mapping.
 - Error shape ⚙️: `{ "error": { "code": "string", "message": "string" } }`
   — exact code taxonomy is implementation detail.
 - Pagination ⚙️: where a list endpoint could return an unbounded
@@ -37,16 +37,56 @@ contract, not a new decision. Every endpoint below is tagged:
 
 ## Identity
 
-⏸ **Deferred, stated plainly rather than invented:** no AD defines a full
-authentication/session/token architecture. `docs/DOMAIN_MODEL.md` §3
-explicitly marks this deferred; `docs/IMPLEMENTATION_PLAN.md`'s B1 scopes
-only "the minimal boundary needed to attribute a Card to a user."
+🔒 **AD-082 — Authentication provider and request identity:** Vision uses
+Firebase Authentication. After sign-in, the Android Firebase Authentication
+SDK obtains a Firebase ID token and sends it to the Vision backend over
+HTTPS as `Authorization: Bearer <Firebase ID token>`. Firebase manages the
+authentication session and token lifecycle; Android does not maintain a
+second Vision-specific access/refresh-token session.
 
-🔒 **What is decided:** every protected endpoint below requires the
-backend to resolve a `userId` from the request and evaluate authorization
-against **live** domain state for that user (AD-056) — never from a
-client-supplied claim, a cached permission, or the mere existence of an
-object ID (AD-056, AD-058).
+The backend verifies the ID token with the Firebase Admin SDK for the
+configured Firebase project. Only the verified token's Firebase `uid` is
+used to look up the caller's durable, uniquely constrained identity mapping
+to `app_user.id`. The external Firebase UID and internal Vision UUID are
+separate identifiers. Email is profile data, not an identity key; the
+backend does not match accounts by email. Clients cannot choose or assert a
+Firebase UID or Vision `userId` as their authenticated identity.
+
+The existing server boundary remains `TokenResolver` →
+`AuthenticatedUser(UUID userId)` → `SecurityContext` → domain authorization.
+Firebase-specific verification and UID resolution end at `TokenResolver`;
+controllers and domain services continue to receive the internal Vision
+UUID. Invalid/expired tokens and valid Firebase UIDs without a persisted
+Vision mapping cannot authenticate to protected endpoints. Unknown UIDs are
+not auto-provisioned or linked by email. The current `app_user` model has no
+production creation/provisioning flow, so trusted onboarding/provisioning,
+including safe treatment of existing unmapped users, remains deferred.
+
+🔒 **Authentication does not grant Vision authorization:** every protected
+endpoint requires the backend to resolve the mapped internal `userId` and
+evaluate authorization against **live** Vision domain state (AD-056/058).
+Firebase custom claims, client-supplied claims, cached permissions, email,
+or object IDs do not establish domain access. Card ownership, Course Space
+membership and roles, artifact ownership/sharing, and Sarah access remain
+governed by the existing PostgreSQL-backed authorization architecture.
+Knowing a Firebase UID, `app_user.id`, Card, Resource, artifact,
+membership, or conversation ID grants no access; existing BOLA/IDOR
+protections remain unchanged.
+
+Firebase Authentication endpoints are not Vision API endpoints. No
+`/v1/auth/register`, `/v1/auth/login`, or `/v1/auth/refresh` routes are
+introduced; those belong to the retired historical authentication design.
+Firebase Admin/service-account credentials belong only in trusted backend
+infrastructure and must never be placed in Android. Android will use the
+official Firebase Authentication SDK and Firebase Android BoM when A1 is
+implemented. The current Android sign-in UI specifies email/password;
+other Firebase sign-in methods remain deferred.
+
+Account deletion continues to obey AD-049–052. Successful Vision account
+deletion must also remove or disable the associated Firebase Authentication
+identity; an AD-051 deletion conflict must leave that identity intact.
+Cross-system ordering, retries, and partial-failure handling remain
+implementation details.
 
 ```
 GET /v1/me
@@ -55,6 +95,10 @@ GET /v1/me
 - Response: `{ "userId": "uuid", "email": "string" }` ⚙️ (exact profile
   fields beyond `userId` are implementation detail — no AD specifies a
   User profile shape beyond what's needed for ownership attribution).
+- The response `userId` is the internal Vision `app_user.id`; it is not the
+  Firebase UID. Authentication is supplied by the verified Firebase ID
+  token in the Bearer header. This profile endpoint does not create or
+  provision an account.
 
 ---
 
