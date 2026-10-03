@@ -716,6 +716,12 @@ closes the persistence-mechanism gap it explicitly left open.
   AD-047's historical wording. AD-075 defines a deterministic oldest-active-
   share ownership successor without changing AD-050's historical meaning.
 
+- **AD-078 (additive B7 clarification, 2026-10-03 — canonical FlashcardSet and private review progress)** — A `FlashcardSet` is one canonical AD-030 artifact using the existing AD-057 exactly-one-owner fields (`owner_card_id`/`owner_user_id`) and the existing explicit artifact-sharing architecture. A set contains an ordered collection of cards. Each card has `front` and `back` content and a stable identity so private progress can refer to that specific card; card order is deterministic. The canonical content model does not fork by creation method or sharing context.
+
+  Review progress is separate from canonical FlashcardSet content and belongs to exactly one reviewing User and one specific card. It is private to that User; neither reading nor changing one user's progress exposes or changes another user's progress. Review recording accepts only `AGAIN` and `GOT_IT`; these values record review outcomes only. B7 defines no scheduling or due-date behavior, review intervals, Leitner/SM-2 or other algorithms, additional card types, grading rules, or other review semantics. FlashcardSet content reads/writes and progress access use current persisted ownership, share, and authorization state under AD-045/056; Course Space membership is not ownership. This decision adds only the minimum canonical content and private outcome-recording model needed for B7 and does not alter AD-053's canonical-artifact/personal-state boundary or any historical decision text.
+
+- **Revision note (2026-10-03)** — AD-078 additively resolves the B7 Flashcard content and review-outcome model deferred by AD-053. Historical meaning of AD-053 and existing ownership, sharing, and authorization decisions remains unchanged.
+
 - **Revision note (2026-10-02)** — AD-066 and AD-067 add the previously
   unspecified transfer result and member-Card relationship without
   changing the historical wording of AD-042 or AD-033. AD-068 resolves
