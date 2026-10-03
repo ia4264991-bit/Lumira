@@ -83,7 +83,7 @@ much of it has actually been built.
 
 As verified against `origin/master` at `976615ba3e2bfd749df548677b45c671374ce4c2` on 2026-10-03:
 
-- **Backend**: B0 and B1 exist, and B1's prior externally reported PostgreSQL validation is recorded in `docs/IMPLEMENTATION_STATE.md`. B2 includes sharing, memberships, invitations, join requests, lifecycle operations, and PostgreSQL integration tests. Ownership transfer is the remaining implementation item; the current working-tree transfer changes have not passed Maven validation.
+- **Backend**: B0 and B1 exist, and B1's prior externally reported PostgreSQL validation is recorded in `docs/IMPLEMENTATION_STATE.md`. B2 includes sharing, memberships, invitations, join requests, lifecycle operations, and PostgreSQL integration tests. Ownership transfer was absent from the verified remote state and is now implemented in local commits `91eae6e` and `82ecd3c`; Maven validation has not passed.
 - **Frontend**: real, working PDF-reader/auth/chat thin client (Selection Engine complete, Room persistence, auth screens, chat UI) — predates the Card/Course Space pivot, not yet rebuilt around it.
 - **`API_CONTRACT.md`**: live and authoritative at the network boundary.
 - **No admin web application exists yet in any form.**
