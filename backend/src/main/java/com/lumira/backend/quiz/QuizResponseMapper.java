@@ -5,7 +5,8 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
+import java.util.Collection;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 @Component
@@ -19,16 +20,27 @@ public class QuizResponseMapper {
     }
 
     public QuizResponse from(Quiz quiz, boolean revealCorrectness) {
-        List<QuizQuestion> quizQuestions = questions.findByQuizIdOrderByPositionAsc(quiz.getId());
+        return fromMany(List.of(quiz), ignored -> revealCorrectness).getFirst();
+    }
+
+    public List<QuizResponse> fromMany(List<Quiz> quizzes, Predicate<Quiz> revealCorrectness) {
+        if (quizzes.isEmpty()) return List.of();
+        List<UUID> quizIds = quizzes.stream().map(Quiz::getId).toList();
+        Map<UUID, List<QuizQuestion>> byQuiz = questions.findByQuizIdInOrderByQuizIdAscPositionAsc(quizIds).stream()
+                .collect(Collectors.groupingBy(QuizQuestion::getQuizId));
+        List<QuizQuestion> allQuestions = byQuiz.values().stream().flatMap(Collection::stream).toList();
         Map<UUID, List<QuizQuestionOption>> byQuestion = options.findByQuestionIdInOrderByQuestionIdAscPositionAsc(
-                        quizQuestions.stream().map(QuizQuestion::getId).toList())
+                        allQuestions.stream().map(QuizQuestion::getId).toList())
                 .stream().collect(Collectors.groupingBy(QuizQuestionOption::getQuestionId));
-        List<QuizQuestionResponse> questionResponses = quizQuestions.stream()
-                .map(question -> new QuizQuestionResponse(question.getId(), question.getPosition(), question.getPrompt(),
-                        byQuestion.getOrDefault(question.getId(), List.of()).stream()
-                                .map(option -> QuizOptionResponse.from(option, revealCorrectness)).toList()))
-                .toList();
-        return new QuizResponse(quiz.getId(), quiz.getOwner().getOwningCardId(), quiz.getOwner().getOwningUserId(),
-                quiz.getTitle(), quiz.getDescription(), questionResponses, quiz.getCreatedAt(), quiz.getUpdatedAt());
+        return quizzes.stream().map(quiz -> {
+            boolean reveal = revealCorrectness.test(quiz);
+            List<QuizQuestionResponse> questionResponses = byQuiz.getOrDefault(quiz.getId(), List.of()).stream()
+                    .map(question -> new QuizQuestionResponse(question.getId(), question.getPosition(), question.getPrompt(),
+                            byQuestion.getOrDefault(question.getId(), List.of()).stream()
+                                    .map(option -> QuizOptionResponse.from(option, reveal)).toList()))
+                    .toList();
+            return new QuizResponse(quiz.getId(), quiz.getOwner().getOwningCardId(), quiz.getOwner().getOwningUserId(),
+                    quiz.getTitle(), quiz.getDescription(), questionResponses, quiz.getCreatedAt(), quiz.getUpdatedAt());
+        }).toList();
     }
 }

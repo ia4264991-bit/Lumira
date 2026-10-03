@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
 
 /**
  * Service for Card lifecycle operations (B1 scope).
@@ -47,8 +48,9 @@ public class CardService {
      * Never returns another user's cards (AD-041).
      */
     @Transactional(readOnly = true)
-    public List<Card> listMyCards(UUID ownerId) {
-        return cardRepository.findByOwnerIdOrderByCreatedAtDesc(ownerId);
+    public List<Card> listMyCards(UUID ownerId, int page, int pageSize) {
+        return cardRepository.findByOwnerIdOrderByCreatedAtDescIdAsc(ownerId,
+                PageRequest.of(page, pageSize)).getContent();
     }
 
     /**

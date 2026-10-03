@@ -59,13 +59,14 @@ public class FlashcardSetService {
     public List<FlashcardSetResponse> list(UUID cardId, UUID actorId) {
         Card card = authorization.requireCardReadable(cardId, actorId);
         if (!card.isShared()) {
-            return sets.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId).stream().map(mapper::from).toList();
+            return mapper.fromMany(sets.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId));
         }
-        return shares.findByCardIdAndActiveTrueOrderByCreatedAtAsc(cardId).stream()
+        List<UUID> ids = shares.findByCardIdAndActiveTrueOrderByCreatedAtAsc(cardId).stream()
                 .filter(s -> s.getFlashcardSetId() != null).map(ResourceShare::getFlashcardSetId)
-                .map(sets::findById).flatMap(java.util.Optional::stream)
-                .sorted(java.util.Comparator.comparing(FlashcardSet::getCreatedAt).reversed())
-                .map(mapper::from).toList();
+                .toList();
+        List<FlashcardSet> values = sets.findAllById(ids).stream()
+                .sorted(java.util.Comparator.comparing(FlashcardSet::getCreatedAt).reversed()).toList();
+        return mapper.fromMany(values);
     }
 
     @Transactional(readOnly = true)

@@ -62,11 +62,16 @@ public class CardController {
      */
     @GetMapping
     public List<?> listMyCards(@RequestParam(required = false) String scope,
+                               @RequestParam(defaultValue = "0") int page,
+                               @RequestParam(defaultValue = "50") int pageSize,
                                @CurrentUser AuthenticatedUser currentUser) {
-        if (scope == null) {
-            return cardService.listMyCards(currentUser.userId()).stream().map(CardResponse::from).toList();
+        if (page < 0 || pageSize < 1 || pageSize > 100) {
+            throw new ValidationException("page must be non-negative and pageSize must be between 1 and 100");
         }
-        if ("shared".equals(scope)) return courseSpaceService.listSharedCards(currentUser.userId());
+        if (scope == null) {
+            return cardService.listMyCards(currentUser.userId(), page, pageSize).stream().map(CardResponse::from).toList();
+        }
+        if ("shared".equals(scope)) return courseSpaceService.listSharedCards(currentUser.userId(), page, pageSize);
         throw new ValidationException("scope must be 'shared' when provided");
     }
 

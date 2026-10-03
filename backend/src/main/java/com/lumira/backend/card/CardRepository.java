@@ -10,6 +10,8 @@ import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 /**
  * Repository for {@link Card} entities.
@@ -20,7 +22,7 @@ import java.util.UUID;
 @Repository
 public interface CardRepository extends JpaRepository<Card, UUID> {
 
-    List<Card> findByOwnerIdOrderByCreatedAtDesc(UUID ownerId);
+    Page<Card> findByOwnerIdOrderByCreatedAtDescIdAsc(UUID ownerId, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from Card c where c.ownerId = :ownerId order by c.id")
@@ -49,9 +51,12 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
     Optional<Card> findByInviteToken(String inviteToken);
 
     List<Card> findByIdInAndIsSharedTrue(List<UUID> ids);
+    List<Card> findByIdInAndOwnerId(List<UUID> ids, UUID ownerId);
 
-    @Query("select c, m.role from Card c left join CardMembership m on m.cardId = c.id and m.userId = :userId and m.status = :active " +
-            "where c.isShared = true and (c.ownerId = :userId or m.id is not null) order by c.createdAt desc")
-    List<Object[]> findSharedCardsForUser(@Param("userId") UUID userId,
-                                          @Param("active") MembershipStatus active);
+    @Query(value = "select c, m.role from Card c left join CardMembership m on m.cardId = c.id and m.userId = :userId and m.status = :active " +
+            "where c.isShared = true and (c.ownerId = :userId or m.id is not null) order by c.createdAt desc, c.id asc",
+            countQuery = "select count(c) from Card c left join CardMembership m on m.cardId = c.id and m.userId = :userId and m.status = :active " +
+                    "where c.isShared = true and (c.ownerId = :userId or m.id is not null)")
+    Page<Object[]> findSharedCardsForUser(@Param("userId") UUID userId,
+                                          @Param("active") MembershipStatus active, Pageable pageable);
 }

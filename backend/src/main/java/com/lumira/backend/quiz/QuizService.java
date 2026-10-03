@@ -80,7 +80,12 @@ public class QuizService {
             values = quizzes.findAllById(ids).stream()
                     .sorted(java.util.Comparator.comparing(Quiz::getCreatedAt).reversed()).toList();
         }
-        return values.stream().map(q -> mapper.from(q, authorization.isOwner(q.getOwner(), actorId))).toList();
+        Set<UUID> ownedCardIds = authorization.ownedCardIds(actorId, values.stream()
+                .map(Quiz::getOwner).filter(owner -> !owner.isUserOwned())
+                .map(ArtifactOwner::getOwningCardId).toList());
+        return mapper.fromMany(values, q -> q.getOwner().isUserOwned()
+                ? q.getOwner().getOwningUserId().equals(actorId)
+                : ownedCardIds.contains(q.getOwner().getOwningCardId()));
     }
 
     @Transactional(readOnly = true)

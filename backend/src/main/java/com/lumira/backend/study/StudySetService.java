@@ -43,9 +43,9 @@ public class StudySetService {
     public List<StudySetResponse> list(UUID cardId, UUID actorId) {
         Card card = authorization.requireCardReadable(cardId, actorId);
         if (!card.isShared()) return studySets.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId).stream().map(StudySetResponse::from).toList();
-        return shares.findByCardIdAndActiveTrueOrderByCreatedAtAsc(cardId).stream()
-                .filter(s -> s.getStudySetId() != null).map(ResourceShare::getStudySetId).map(studySets::findById)
-                .flatMap(java.util.Optional::stream).sorted(Comparator.comparing(StudySet::getCreatedAt).reversed())
+        List<UUID> sharedIds = shares.findByCardIdAndActiveTrueOrderByCreatedAtAsc(cardId).stream()
+                .filter(s -> s.getStudySetId() != null).map(ResourceShare::getStudySetId).toList();
+        return studySets.findAllById(sharedIds).stream().sorted(Comparator.comparing(StudySet::getCreatedAt).reversed())
                 .map(StudySetResponse::from).toList();
     }
 

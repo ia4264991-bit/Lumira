@@ -79,6 +79,9 @@ GET /v1/cards
 GET /v1/cards?scope=shared
 ```
 - Auth: required.
+- Optional query parameters: `page` (zero-based, default `0`) and
+  `pageSize` (default `50`, maximum `100`). Pages are ordered by
+  `createdAt` descending, then `id` ascending for stable boundaries.
 - 🔒 Two **filtered views of the same underlying resource** (AD-019) —
   `scope=shared` returns Cards where `isShared=true` that the caller owns
   or is an active member of; the default (no `scope`) returns every Card

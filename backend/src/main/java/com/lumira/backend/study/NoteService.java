@@ -43,9 +43,9 @@ public class NoteService {
     public List<NoteResponse> list(UUID cardId, UUID actorId) {
         Card card = authorization.requireCardReadable(cardId, actorId);
         if (!card.isShared()) return notes.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId).stream().map(NoteResponse::from).toList();
-        return shares.findByCardIdAndActiveTrueOrderByCreatedAtAsc(cardId).stream()
-                .filter(s -> s.getNoteId() != null).map(ResourceShare::getNoteId).map(notes::findById)
-                .flatMap(java.util.Optional::stream).sorted(Comparator.comparing(Note::getCreatedAt).reversed())
+        List<UUID> sharedIds = shares.findByCardIdAndActiveTrueOrderByCreatedAtAsc(cardId).stream()
+                .filter(s -> s.getNoteId() != null).map(ResourceShare::getNoteId).toList();
+        return notes.findAllById(sharedIds).stream().sorted(Comparator.comparing(Note::getCreatedAt).reversed())
                 .map(NoteResponse::from).toList();
     }
 

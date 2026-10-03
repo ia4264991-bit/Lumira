@@ -17,6 +17,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
 
 /** B2 lifecycle and authorization operations for Course Spaces (shared Cards). */
 @Service
@@ -69,14 +70,11 @@ public class CourseSpaceService {
     }
 
     @Transactional(readOnly = true)
-    public List<SharedCardResponse> listSharedCards(UUID userId) {
-        List<SharedCardResponse> result = new ArrayList<>();
-        for (Object[] row : cardRepository.findSharedCardsForUser(userId, MembershipStatus.ACTIVE)) {
-            Card card = (Card) row[0];
-            MembershipRole role = row[1] == null ? MembershipRole.OWNER : (MembershipRole) row[1];
-            result.add(SharedCardResponse.from(card, role));
-        }
-        return result;
+    public List<SharedCardResponse> listSharedCards(UUID userId, int page, int pageSize) {
+        return cardRepository.findSharedCardsForUser(userId, MembershipStatus.ACTIVE,
+                        PageRequest.of(page, pageSize)).getContent()
+                .stream().map(row -> SharedCardResponse.from((Card) row[0],
+                        row[1] == null ? MembershipRole.OWNER : (MembershipRole) row[1])).toList();
     }
 
     public Card enableSharing(UUID cardId, UUID actorId) {

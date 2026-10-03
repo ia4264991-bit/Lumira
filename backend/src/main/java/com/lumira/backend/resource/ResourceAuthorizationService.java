@@ -13,6 +13,8 @@ import com.lumira.backend.user.UserRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Collection;
+import java.util.Set;
 import java.util.UUID;
 
 /** Live, persisted authorization policy shared by artifact and sharing operations (AD-041/056). */
@@ -118,6 +120,12 @@ public class ResourceAuthorizationService {
     public boolean isOwner(ArtifactOwner owner, UUID actorId) {
         if (owner.isUserOwned()) return owner.getOwningUserId().equals(actorId);
         return cards.findByIdAndOwnerId(owner.getOwningCardId(), actorId).isPresent();
+    }
+
+    public Set<UUID> ownedCardIds(UUID actorId, Collection<UUID> candidateCardIds) {
+        if (candidateCardIds.isEmpty()) return Set.of();
+        return cards.findByIdInAndOwnerId(candidateCardIds.stream().distinct().toList(), actorId).stream()
+                .map(Card::getId).collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 
     private MembershipRole activeRole(Card card, UUID actorId) {

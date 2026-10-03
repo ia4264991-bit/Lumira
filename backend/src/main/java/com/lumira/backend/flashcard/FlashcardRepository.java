@@ -13,6 +13,7 @@ import java.util.UUID;
 public interface FlashcardRepository extends JpaRepository<Flashcard, UUID> {
     List<Flashcard> findByFlashcardSetIdOrderByPositionAsc(UUID setId);
     List<Flashcard> findByFlashcardSetIdOrderByPositionAscIdAsc(UUID setId);
+    List<Flashcard> findByFlashcardSetIdInOrderByFlashcardSetIdAscPositionAscIdAsc(List<UUID> setIds);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select f from Flashcard f where f.id=:id")
     Optional<Flashcard> findByIdForUpdate(@Param("id") UUID id);
