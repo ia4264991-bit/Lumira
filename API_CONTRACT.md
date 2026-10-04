@@ -23,8 +23,10 @@ contract, not a new decision. Every endpoint below is tagged:
 
 - Base path: `/v1/`.
 - IDs: UUID, as strings in JSON.
-- Auth header: `Authorization: Bearer <Firebase ID token>` over HTTPS — see
-  **Identity** below for server verification and Vision identity mapping.
+- Auth header: `Authorization: Bearer <Firebase ID token>` over HTTPS. The
+  backend cryptographically verifies the Firebase ID token, resolves its
+  verified UID to the persisted Vision identity, and then runs the existing
+  UUID-based authorization pipeline; see **Identity** below.
 - Error shape ⚙️: `{ "error": { "code": "string", "message": "string" } }`
   — exact code taxonomy is implementation detail.
 - Pagination ⚙️: where a list endpoint could return an unbounded

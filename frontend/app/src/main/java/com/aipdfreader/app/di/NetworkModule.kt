@@ -2,9 +2,11 @@ package com.aipdfreader.app.di
 
 import com.aipdfreader.app.BuildConfig
 import com.aipdfreader.app.data.remote.AiRouterApi
-import com.aipdfreader.app.data.remote.AuthApi
+import com.aipdfreader.app.data.remote.CardApi
+import com.aipdfreader.app.data.remote.DomainApi
 import com.aipdfreader.app.data.remote.AuthInterceptor
 import com.aipdfreader.app.util.Constants
+import com.google.firebase.auth.FirebaseAuth
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -39,6 +41,10 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideFirebaseAuth(): FirebaseAuth = FirebaseAuth.getInstance()
+
+    @Provides
+    @Singleton
     fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
         val builder = OkHttpClient.Builder()
             .connectTimeout(Constants.NETWORK_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -66,9 +72,13 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideAuthApi(retrofit: Retrofit): AuthApi = retrofit.create(AuthApi::class.java)
+    fun provideAiRouterApi(retrofit: Retrofit): AiRouterApi = retrofit.create(AiRouterApi::class.java)
 
     @Provides
     @Singleton
-    fun provideAiRouterApi(retrofit: Retrofit): AiRouterApi = retrofit.create(AiRouterApi::class.java)
+    fun provideCardApi(retrofit: Retrofit): CardApi = retrofit.create(CardApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideDomainApi(retrofit: Retrofit): DomainApi = retrofit.create(DomainApi::class.java)
 }

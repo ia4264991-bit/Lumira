@@ -64,7 +64,7 @@ class LoginViewModel @Inject constructor(
             }
 
             when (result) {
-                is AuthResult.Success -> {
+                AuthResult.Success -> {
                     _uiState.value = _uiState.value.copy(isSubmitting = false)
                     onSuccess()
                 }

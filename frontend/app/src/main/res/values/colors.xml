@@ -2,6 +2,6 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <!-- Sampled from the Lumira logo artwork's background tone -->
-    <color name="ic_launcher_background">#FF101A19</color>
+    <!-- Matches the black background in the supplied Vision logo. -->
+    <color name="ic_launcher_background">#FF050505</color>
 </resources>

@@ -41,6 +41,8 @@ server:
   port: 8080
 
 lumira:
+  firebase:
+    project-id: ${LUMIRA_FIREBASE_PROJECT_ID}
   resource:
     max-upload-bytes: ${LUMIRA_RESOURCE_MAX_UPLOAD_BYTES:20971520}
     max-pdf-pages: ${LUMIRA_RESOURCE_MAX_PDF_PAGES:500}

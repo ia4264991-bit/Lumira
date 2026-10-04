@@ -31,10 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
 /**
- * Gate screen in front of the rest of the app. The Android client never
- * talks to an AI provider — it authenticates once against OUR backend and
- * every subsequent request (library sync, AI Router, etc.) rides on that
- * session.
+ * Firebase email/password authentication screen. Vision API access uses the
+ * signed-in Firebase user's ID token; account provisioning is a separate step.
  */
 @Composable
 fun LoginScreen(

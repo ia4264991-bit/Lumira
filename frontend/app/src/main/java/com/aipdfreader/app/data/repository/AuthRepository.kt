@@ -1,67 +1,68 @@
 package com.aipdfreader.app.data.repository
 
-import com.aipdfreader.app.data.local.session.SessionTokenStore
-import com.aipdfreader.app.data.remote.AuthApi
-import com.aipdfreader.app.data.remote.dto.LoginRequest
-import com.aipdfreader.app.data.remote.dto.RegisterRequest
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import retrofit2.HttpException
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 sealed class AuthResult {
-    object Success : AuthResult()
+    data object Success : AuthResult()
     data class Failure(val message: String) : AuthResult()
 }
 
-/**
- * Owns the client side of OUR backend's Authentication component. This is
- * the only credential-bearing repository in the app — everything AI-related
- * (provider choice, keys, prompts) lives on the server.
- */
+/** Firebase owns the authentication session and ID-token refresh lifecycle. */
 @Singleton
 class AuthRepository @Inject constructor(
-    private val authApi: AuthApi,
-    private val sessionTokenStore: SessionTokenStore
+    private val firebaseAuth: FirebaseAuth
 ) {
-    private val _isLoggedIn = MutableStateFlow(sessionTokenStore.isLoggedIn())
+    private val _isLoggedIn = MutableStateFlow(firebaseAuth.currentUser != null)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
-
-    val currentUserEmail: String? get() = sessionTokenStore.userEmail
-
-    suspend fun login(email: String, password: String): AuthResult = try {
-        val response = authApi.login(LoginRequest(email = email, password = password))
-        sessionTokenStore.saveSession(response.accessToken, response.refreshToken, response.email ?: email)
-        _isLoggedIn.value = true
-        AuthResult.Success
-    } catch (e: HttpException) {
-        AuthResult.Failure(httpErrorMessage(e))
-    } catch (e: Exception) {
-        AuthResult.Failure(e.message ?: "Couldn't reach the server. Check your connection and try again.")
+    private val authListener = FirebaseAuth.AuthStateListener { auth ->
+        _isLoggedIn.value = auth.currentUser != null
     }
 
-    suspend fun register(email: String, password: String): AuthResult = try {
-        val response = authApi.register(RegisterRequest(email = email, password = password))
-        sessionTokenStore.saveSession(response.accessToken, response.refreshToken, response.email ?: email)
+    init { firebaseAuth.addAuthStateListener(authListener) }
+
+    val currentUserEmail: String? get() = firebaseAuth.currentUser?.email
+
+    suspend fun login(email: String, password: String): AuthResult = authenticate {
+        firebaseAuth.signInWithEmailAndPassword(email, password).await()
+    }
+
+    suspend fun register(email: String, password: String): AuthResult = authenticate {
+        firebaseAuth.createUserWithEmailAndPassword(email, password).await()
+    }
+
+    private suspend fun authenticate(block: suspend () -> Any): AuthResult = try {
+        withContext(Dispatchers.IO) { block() }
         _isLoggedIn.value = true
         AuthResult.Success
-    } catch (e: HttpException) {
-        AuthResult.Failure(httpErrorMessage(e))
     } catch (e: Exception) {
-        AuthResult.Failure(e.message ?: "Couldn't reach the server. Check your connection and try again.")
+        AuthResult.Failure(authErrorMessage(e))
     }
 
     fun logout() {
-        sessionTokenStore.clear()
+        firebaseAuth.signOut()
         _isLoggedIn.value = false
     }
 
-    private fun httpErrorMessage(e: HttpException): String = when (e.code()) {
-        401 -> "Incorrect email or password."
-        409 -> "An account with that email already exists."
-        in 500..599 -> "The server had a problem. Please try again shortly."
-        else -> "Something went wrong (code ${e.code()})."
+    private fun authErrorMessage(error: Throwable): String = when {
+        error is FirebaseAuthInvalidCredentialsException || error is FirebaseAuthInvalidUserException ->
+            "That email or password wasn’t accepted. Check your details and try again."
+        error is FirebaseAuthException && error.errorCode.contains("EMAIL_ALREADY_IN_USE") ->
+            "An account with that email already exists. Sign in instead."
+        error is FirebaseAuthException && error.errorCode.contains("WEAK_PASSWORD") ->
+            "Choose a stronger password (at least 6 characters)."
+        error.message?.contains("network", ignoreCase = true) == true ->
+            "Couldn’t reach Firebase. Check your connection and try again."
+        else -> "We couldn’t complete sign-in. Please try again."
     }
 }

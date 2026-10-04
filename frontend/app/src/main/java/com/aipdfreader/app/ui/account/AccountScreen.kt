@@ -24,9 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
 /**
- * Replaces the old "AI Settings" screen. There is nothing AI-related to
- * configure on-device anymore (no key, no model, no base URL) — this screen
- * only reflects the backend Authentication session.
+ * Firebase account/session view. Provider configuration remains server-side.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,8 +59,7 @@ fun AccountScreen(
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
-                "Connected to the Lumira backend. Questions to Sarah, document " +
-                    "processing, and provider selection are all handled server-side.",
+                "Signed in with Firebase. Lumira protects your study content and checks access on each request.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

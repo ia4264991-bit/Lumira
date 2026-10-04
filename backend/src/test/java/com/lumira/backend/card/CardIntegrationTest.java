@@ -77,6 +77,22 @@ class CardIntegrationTest extends BaseIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    @Test
+    @DisplayName("Card owner comes from authenticated Vision UUID, not a client-supplied userId")
+    void createCard_ignoresClientSuppliedOwnerId() {
+        HttpHeaders headers = authHeaders(userAId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<String> entity = new HttpEntity<>(
+                "{\"name\":\"Identity Boundary\",\"ownerId\":\"" + userBId + "\",\"userId\":\"" + userBId + "\"}",
+                headers);
+
+        ResponseEntity<CardResponse> response = restTemplate.postForEntity(url("/v1/cards"), entity, CardResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().ownerId()).isEqualTo(userAId);
+    }
+
     // -----------------------------------------------------------------------
     // AD-048: a user may own MULTIPLE Cards
     // -----------------------------------------------------------------------

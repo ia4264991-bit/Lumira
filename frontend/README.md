@@ -1,17 +1,11 @@
 # Lumira (Android) — Thin Client
 
-> ⚠️ **Status note — 2026-09-12.** This README accurately describes the
-> Android app's *current, real, existing* code: a PDF-reader/auth/chat thin
-> client. It predates the Card/Course Space/Sarah-as-workspace-capability
-> product pivot. **Treat the code descriptions below as accurate as of
-> today; do not treat the API contract it talks to (`/v1/auth/*`,
-> `/v1/ai/ask`) as the forward architecture** — see `API_CONTRACT.md`'s own
-> retirement notice and `docs/LUMIRA_STATE.md` for current direction. This
-> app has not yet been rebuilt around Card/Course Space.
+> **Status note: 2026-10-04.** Android work is in progress. The Card/Course Space home and Card workspace now call Vision APIs; email/password sign-in uses Firebase Authentication. The existing PDF reader and Selection Engine remain available, with Card Resources uploaded and opened through the existing reader.
 
-An Android app for opening PDFs, selecting text from them, and asking
-Sarah — the in-app AI assistant — questions about the selected passage.
-Built with Kotlin, Jetpack Compose, MVVM, and Room.
+An Android app for Cards, Course Spaces, study materials, quizzes, flashcards,
+Sarah, activity, and notifications, with the existing PDF reader and Selection
+Engine. Built with Kotlin, Jetpack Compose, MVVM, Room, Retrofit, and Firebase
+Authentication. Domain authorization and business rules remain server-side.
 
 *Note: the underlying Gradle `namespace`/`applicationId` remain
 `com.aipdfreader.app` for now — this was a display-name/branding rename
@@ -20,9 +14,10 @@ rename. Renaming the applicationId is a larger, separate change (it touches
 the FileProvider authority, generated `BuildConfig`, and every import in the
 codebase) and hasn't been done here.*
 
-**This client holds no AI provider logic.** It authenticates against our own
-backend and sends it plain, descriptive requests ("the user selected this
-passage and asked this question"). The backend owns provider selection,
+**This client holds no AI provider logic.** Firebase authenticates users and
+provides Firebase ID tokens. The app sends those tokens to the Vision backend
+and sends plain, descriptive requests ("the user selected this passage and
+asked this question"). The backend owns provider selection,
 prompt engineering, API keys, OCR, and context building. *(A prior version
 of this README referenced an `ENGINEERING_REPORT.md` for further rationale
 — that file does not exist anywhere in this repository; treat that as a
@@ -67,78 +62,44 @@ rebuild. For multiple environments (dev/staging/prod), the standard next
 step is Gradle product flavors — not implemented here to keep the diff
 focused, but a natural extension.
 
-## 4. Authentication
+## 4. Firebase setup and authentication
 
-On first launch, the app shows a **Sign in / Register** screen. Credentials
-are sent to `POST /v1/auth/login` or `/v1/auth/register` (see
-`AuthApi.kt`); the backend's session token is stored locally and attached
-as a `Bearer` header to every subsequent request by `AuthInterceptor`. The
-app never stores or transmits any AI provider key — it has no concept of
-one.
+1. Register `com.aipdfreader.app` as an Android app in the Firebase project used by the backend, and enable **Email/Password** sign-in.
+2. Download that app's `google-services.json` and place it in `frontend/app/google-services.json`.
+3. Confirm the Firebase project ID matches `LUMIRA_FIREBASE_PROJECT_ID` on the backend. Never put backend Admin SDK credentials in Android.
 
-## 5. Using the app
+The Firebase SDK owns the sign-in session and ID-token refresh lifecycle. `AuthInterceptor` attaches the current Firebase ID token as a Bearer token to Vision API requests; the app does not store a separate Vision token or log token contents.
 
-Feature set is unchanged from the original standalone build:
+**Account provisioning is deferred by AD-082.** Firebase sign-in can succeed before a trusted onboarding flow creates the matching Vision user. Until that mapping exists, protected API calls explain that this account is not linked. The app does not link identities by email.
+## 5. Current navigation and PDF flow
 
-1. **Library** → **Add PDF** → pick a file via the system document picker.
-2. Tap a document to open the **Reader**; pinch to zoom, drag to pan.
-3. Tap the **text icon** to open the selectable text panel for the current
-   page (long-press to select, copy, then **Use copied text**).
-4. **Highlight** to save a passage, or **Ask AI** to open a chat scoped to
-   it.
-5. In **Chat**, ask follow-ups — the app forwards your question and the
-   selected passage to the backend's AI Router; it does not construct a
-   prompt itself.
-6. Tap the **account icon** on the Library screen to see your session or
-   sign out.
+The app opens to Firebase sign-in or the backend-backed Cards / Course Spaces home. From a Card workspace, the user can upload and open PDF Resources, create Notes and Study Sets, build/take Quizzes, review Flashcards, ask Sarah, see Course Space members and Updates, and view in-app notifications. PDFs downloaded from a Resource are added to the existing local Room library so the current Reader and Selection Engine can display them.
+
+The standalone Library still supports local PDF import. Sarah requires a backend Resource because the local-only PDF has no Vision Resource ID. The Reader explains that constraint if Sarah is selected for a PDF imported only to the device.
 
 ## 6. Architecture
 
-```
-app/
- ├─ data/
- │   ├─ local/
- │   │   ├─ (Room) entities, DAOs, AppDatabase
- │   │   └─ session/         SessionTokenStore — OUR backend's auth tokens only
- │   ├─ remote/
- │   │   ├─ AuthApi.kt        POST /v1/auth/{login,register,refresh}
- │   │   ├─ AiRouterApi.kt    POST /v1/ai/ask  (the ONLY AI-related call)
- │   │   ├─ AuthInterceptor.kt Attaches our bearer token to every request
- │   │   └─ dto/              AuthDto.kt, AiDto.kt — our own wire contracts
- │   └─ repository/          PdfRepository, HighlightRepository,
- │                            ChatRepository, AiRepository, AuthRepository
- ├─ domain/model/            Plain Kotlin models used by the UI layer
- ├─ pdf/                     Local PDF rendering (zoom) + text extraction
- │                           (feeds the selection UI, NOT the AI request)
- ├─ di/                      Hilt modules: AppModule (Room), NetworkModule
- │                           (Retrofit/OkHttp/API interfaces)
- ├─ ui/
- │   ├─ auth/                Login/Register screen
- │   ├─ account/             Session info + sign out (replaces old AI Settings)
- │   ├─ library/             PDF picker + library list
- │   ├─ reader/              PDF viewer, zoom, text selection, highlights
- │   ├─ chat/                AI chat screen
- │   ├─ navigation/          Compose Navigation graph (Login-gated)
- │   └─ theme/               Material3 theme
- └─ util/                    FileUtils (SAF import), Constants
-```
+- Authentication: Firebase email/password; ID tokens attach to Vision requests.
+- Cards/Course Spaces: CardApi, CardHomeViewModel, and Card workspace sharing/member UI.
+- Study features: DomainApi and the workspace view model call resource, Note, Study Set, Quiz, Flashcard, Sarah, event, and notification endpoints.
+- PDF: existing Room library, local renderer, text extractor, and Selection Engine; backend Resource bytes are imported into the same reader path.
+- Networking: Retrofit, Kotlin serialization, OkHttp, and Hilt. The client contains no provider keys or authoritative authorization rules.
 
-The client-server/thin-client architecture change is described in this
-README's history; ongoing Selection Engine work (lasso selection, text
-layout, future intersection/OCR) has its own maintained engineering
-documentation — see `docs/engineering/README.md` for the index of
-per-milestone reports (`docs/engineering/M1.0_Foundation_Layer.md`,
-`docs/engineering/M1.1_Text_Layout_Engine.md`, and so on as new milestones
-complete).
+## 6.1 Firebase setup
+
+Add the Firebase Console-generated google-services.json to frontend/app/ and enable Email/Password sign-in for Android package com.aipdfreader.app. Set the backend LUMIRA_FIREBASE_PROJECT_ID to that same Firebase project. The Android file contains project-specific public client identifiers; backend Admin credentials must remain on the server.
 
 ## 7. Known limitations / next steps
 
-- **Token refresh**: `AuthApi.refresh()` exists but isn't wired into an
-  OkHttp `Authenticator` yet — a 401 currently surfaces as "please sign in
-  again" rather than transparently refreshing.
-- **Document sync**: `AskRequest.documentId` currently sends the client's
-  local Room id as a best-effort reference. Once a document-upload/sync
-  endpoint exists, this should carry the backend's own document id instead.
+- **Firebase UID provisioning**: AD-082 defers the trusted process that
+  maps authenticated Firebase users to Vision users. Protected app APIs
+  remain unavailable until that mapping is made.
+- **Android Studio validation**: the client has not yet been built or
+  exercised on an emulator. Add google-services.json, sync/build, and debug
+  before treating the Android implementation as complete.
+- **Account deletion**: AD-082 requires successful Vision account deletion
+  to also remove or disable its Firebase identity. That cross-system backend
+  behavior must be confirmed before wiring account deletion in the client.
 - **Scanned/image-only PDFs**: local extraction (PDFBox) has no OCR: the
   selection panel will show "No extractable text found" for scanned pages.
   Server-side OCR (already in the target architecture) is the right place

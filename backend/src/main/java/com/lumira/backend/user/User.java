@@ -11,10 +11,8 @@ import java.util.UUID;
 /**
  * Internal user identity entity (AD-019/AD-048).
  *
- * <p>Stable {@code userId} decoupled from any auth-provider identity.
- * The full token/session architecture is explicitly deferred per the
- * red-team reconciliation in {@code docs/DECISIONS.md}; this entity
- * provides the minimum identity needed to attribute artifacts to a user.
+ * <p>The stable Vision UUID remains the domain identity and is distinct from
+ * the optional Firebase UID mapped to this account by AD-082.
  */
 @Entity
 @Table(name = "app_user")
@@ -25,6 +23,9 @@ public class User extends BaseEntity {
 
     @Column(name = "display_name", nullable = false)
     private String displayName;
+
+    @Column(name = "firebase_uid", unique = true, length = 128)
+    private String firebaseUid;
 
     protected User() {
         // JPA
@@ -50,6 +51,10 @@ public class User extends BaseEntity {
 
     public String getDisplayName() {
         return displayName;
+    }
+
+    public String getFirebaseUid() {
+        return firebaseUid;
     }
 
     public void setDisplayName(String displayName) {
