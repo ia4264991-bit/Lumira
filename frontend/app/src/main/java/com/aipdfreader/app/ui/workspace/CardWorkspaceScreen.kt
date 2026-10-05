@@ -42,6 +42,9 @@ fun CardWorkspaceScreen(
     var dialog by remember { mutableStateOf<String?>(null) }
     var editingNote by remember { mutableStateOf<NoteDto?>(null) }
     var editingStudySet by remember { mutableStateOf<StudySetDto?>(null) }
+    var editingQuiz by remember { mutableStateOf<QuizDto?>(null) }
+    var editingFlashcardSet by remember { mutableStateOf<FlashcardSetDto?>(null) }
+    var progressSet by remember { mutableStateOf<FlashcardSetDto?>(null) }
     var activeQuiz by remember { mutableStateOf<QuizDto?>(null) }
     var activeFlashcards by remember { mutableStateOf<FlashcardSetDto?>(null) }
     var showSharing by remember { mutableStateOf(false) }
@@ -49,8 +52,8 @@ fun CardWorkspaceScreen(
     var sharedNow by remember(isShared) { mutableStateOf(isShared) }
     var activeRole by remember(callerRole) { mutableStateOf(callerRole) }
     val clipboard = LocalClipboardManager.current
-    val pdfPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { viewModel.uploadPdf(cardId, it) }
+    val resourcePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { viewModel.uploadResource(cardId, it) }
     }
     LaunchedEffect(cardId, sharedNow) { viewModel.load(cardId, sharedNow) }
 
@@ -95,10 +98,21 @@ fun CardWorkspaceScreen(
             initialValues = listOf(set.title, set.description), onDismiss = { dialog = null; editingStudySet = null }) { values ->
                 viewModel.updateStudySet(cardId, set.id, values[0], values[1]); dialog = null; editingStudySet = null
             } }
-        "flashcards" -> ArtifactDialog("New Flashcard Set", listOf("Set title", "Front", "Back"), state.busy,
-            onDismiss = { dialog = null }) { values -> viewModel.createFlashcardSet(cardId, values[0], values[1], values[2]); dialog = null }
-        "quiz" -> ArtifactDialog("New Quiz", listOf("Quiz title", "Question", "Correct answer", "Other answer"), state.busy,
-            onDismiss = { dialog = null }) { values -> viewModel.createQuiz(cardId, values[0], values[1], values[2], values[3]); dialog = null }
+        "flashcards" -> FlashcardSetEditorDialog(initial = null, busy = state.busy,
+            onDismiss = { dialog = null }) { draft ->
+                viewModel.createFlashcardSet(cardId, draft.toCreateRequest()) { dialog = null }
+            }
+        "editFlashcards" -> editingFlashcardSet?.let { set -> FlashcardSetEditorDialog(initial = set, busy = state.busy,
+            onDismiss = { dialog = null; editingFlashcardSet = null }) { draft ->
+                viewModel.updateFlashcardSet(cardId, set.id, draft.toPatchRequest()) { dialog = null; editingFlashcardSet = null }
+            } }
+        "quiz" -> QuizEditorDialog(initial = null, busy = state.busy, onDismiss = { dialog = null }) { draft ->
+            viewModel.createQuiz(cardId, draft.toCreateRequest()) { dialog = null }
+        }
+        "editQuiz" -> editingQuiz?.let { quiz -> QuizEditorDialog(initial = quiz, busy = state.busy,
+            onDismiss = { dialog = null; editingQuiz = null }) { draft ->
+                viewModel.updateQuiz(cardId, quiz.id, draft.toPatchRequest()) { dialog = null; editingQuiz = null }
+            } }
     }
     activeQuiz?.let { quiz -> QuizDialog(quiz, onDismiss = { activeQuiz = null }) { answers ->
         viewModel.submitAttempt(quiz.id, answers)
@@ -107,6 +121,16 @@ fun CardWorkspaceScreen(
         viewModel.reviewFlashcard(set.id, flashcard, gotIt)
     } }
     if (showAttempts) AttemptsDialog(state.attempts, onDismiss = { showAttempts = false })
+    progressSet?.let { set ->
+        FlashcardProgressDialog(
+            set = set,
+            progress = state.flashcardProgress[set.id].orEmpty(),
+            loading = state.progressLoading == set.id,
+            error = state.progressError,
+            onRetry = { viewModel.loadFlashcardProgress(set.id) },
+            onDismiss = { progressSet = null }
+        )
+    }
 
     Scaffold(topBar = {
         TopAppBar(title = { Column { Text(cardName, maxLines = 1); Text(if (sharedNow) "Course Space" else "Card workspace", style = MaterialTheme.typography.labelMedium) } },
@@ -130,8 +154,8 @@ fun CardWorkspaceScreen(
             }
             when (section) {
                 0 -> ResourceSection(state.resources, state.busy,
-                    onUpload = { pdfPicker.launch(arrayOf("application/pdf")) },
-                    onOpen = { resource -> viewModel.openPdf(resource) { pdfId -> onOpenPdf(pdfId, resource.id) } },
+                    onUpload = { resourcePicker.launch(arrayOf("application/pdf", "text/plain", "text/csv", "image/png", "image/jpeg", "image/webp", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) },
+                    onOpen = { resource -> viewModel.openResource(resource) { pdfId -> onOpenPdf(pdfId, resource.id) } },
                     onGenerate = { type -> viewModel.generate(cardId, type, state.resources.map { it.id }) })
                 1 -> ArtifactList("Notes", state.notes.map { it.title to it.content }, "Create note", { dialog = "note" }) {
                     state.notes.forEach { note ->
@@ -162,7 +186,10 @@ fun CardWorkspaceScreen(
                             Text("${quiz.questions.size} questions", style = MaterialTheme.typography.bodySmall)
                             Button(onClick = { activeQuiz = quiz }, modifier = Modifier.padding(top = 8.dp)) { Text("Take quiz") }
                             TextButton(onClick = { viewModel.loadAttempts(quiz.id); showAttempts = true }) { Text("Past attempts") }
-                            TextButton(onClick = { viewModel.deleteQuiz(cardId, quiz.id) }) { Text("Delete quiz") }
+                            if (quiz.canEditQuiz()) {
+                                TextButton(onClick = { editingQuiz = quiz; dialog = "editQuiz" }) { Text("Edit quiz") }
+                                TextButton(onClick = { viewModel.deleteQuiz(cardId, quiz.id) }) { Text("Delete quiz") }
+                            }
                         } }
                     }
                 }
@@ -172,6 +199,8 @@ fun CardWorkspaceScreen(
                             Text(set.title, style = MaterialTheme.typography.titleMedium)
                             Text("${set.cards.size} cards", style = MaterialTheme.typography.bodySmall)
                             Button(onClick = { activeFlashcards = set }, modifier = Modifier.padding(top = 8.dp)) { Text("Study") }
+                            TextButton(onClick = { editingFlashcardSet = set; dialog = "editFlashcards" }) { Text("Edit set") }
+                            TextButton(onClick = { progressSet = set; viewModel.loadFlashcardProgress(set.id) }) { Text("Review history") }
                             TextButton(onClick = { viewModel.deleteFlashcardSet(cardId, set.id) }) { Text("Delete set") }
                         } }
                     }
@@ -203,7 +232,7 @@ private fun ResourceSection(resources: List<ResourceDto>, busy: Boolean, onUploa
                             onOpen: (ResourceDto) -> Unit, onGenerate: (String) -> Unit) {
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onUpload, enabled = !busy) { Icon(Icons.Filled.Add, null); Text(" Add PDF") }
+            Button(onClick = onUpload, enabled = !busy) { Icon(Icons.Filled.Add, null); Text(" Add resource") }
             var showGenerate by remember { mutableStateOf(false) }
             OutlinedButton(onClick = { showGenerate = true }, enabled = resources.isNotEmpty() && !busy) { Text("Sarah create") }
             if (showGenerate) AlertDialog(onDismissRequest = { showGenerate = false }, title = { Text("Create from resources") },
@@ -215,16 +244,16 @@ private fun ResourceSection(resources: List<ResourceDto>, busy: Boolean, onUploa
                 } }, dismissButton = { TextButton(onClick = { showGenerate = false }) { Text("Cancel") } })
         }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-        if (resources.isEmpty()) EmptyPanel("Your PDFs will appear here after you add one.")
+        if (resources.isEmpty()) EmptyPanel("Your resources will appear here after you add one.")
         else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(resources, key = { it.id }) { resource ->
-                Card(onClick = { if (resource.mimeType == "application/pdf") onOpen(resource) }, modifier = Modifier.fillMaxWidth()) {
+                Card(onClick = { onOpen(resource) }, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(resource.title, style = MaterialTheme.typography.titleMedium)
                             Text("${resource.status} · ${resource.originalFilename.orEmpty()}", style = MaterialTheme.typography.bodySmall)
                         }
-                        if (resource.mimeType == "application/pdf") TextButton(onClick = { onOpen(resource) }) { Text("Open") }
+                        TextButton(onClick = { onOpen(resource) }) { Text("Open") }
                     }
                 }
             }
@@ -459,4 +488,8 @@ private fun PeopleSection(
         if (isOwner) item { TextButton(onClick = { confirmDissolve = true }) { Text("Dissolve Course Space") } }
         else if (callerRole == "ADMIN" || callerRole == "MEMBER") item { TextButton(onClick = onLeave) { Text("Leave Course Space") } }
     }
+}
+
+private fun QuizDto.canEditQuiz(): Boolean = questions.isNotEmpty() && questions.all { question ->
+    question.options.isNotEmpty() && question.options.all { it.correct != null }
 }

@@ -29,14 +29,17 @@ interface DomainApi {
 
     @GET("v1/cards/{cardId}/quizzes") suspend fun quizzes(@Path("cardId") cardId: String): List<QuizDto>
     @POST("v1/cards/{cardId}/quizzes") suspend fun createQuiz(@Path("cardId") cardId: String, @Body body: QuizWriteDto): QuizDto
+    @PATCH("v1/quizzes/{quizId}") suspend fun updateQuiz(@Path("quizId") id: String, @Body body: QuizPatchDto): QuizDto
     @DELETE("v1/quizzes/{quizId}") suspend fun deleteQuiz(@Path("quizId") id: String): Response<Unit>
     @POST("v1/quizzes/{quizId}/attempts") suspend fun submitQuizAttempt(@Path("quizId") id: String, @Body body: QuizAttemptWriteDto): QuizAttemptDto
     @GET("v1/quizzes/{quizId}/attempts/me") suspend fun myQuizAttempts(@Path("quizId") id: String): List<QuizAttemptDto>
 
     @GET("v1/cards/{cardId}/flashcard-sets") suspend fun flashcardSets(@Path("cardId") cardId: String): List<FlashcardSetDto>
     @POST("v1/cards/{cardId}/flashcard-sets") suspend fun createFlashcardSet(@Path("cardId") cardId: String, @Body body: FlashcardSetWriteDto): FlashcardSetDto
+    @PATCH("v1/flashcard-sets/{setId}") suspend fun updateFlashcardSet(@Path("setId") id: String, @Body body: FlashcardSetPatchDto): FlashcardSetDto
     @DELETE("v1/flashcard-sets/{setId}") suspend fun deleteFlashcardSet(@Path("setId") id: String): Response<Unit>
     @POST("v1/flashcard-sets/{setId}/progress") suspend fun reviewFlashcard(@Path("setId") id: String, @Body body: FlashcardProgressWriteDto): FlashcardProgressDto
+    @GET("v1/flashcard-sets/{setId}/progress/me") suspend fun myFlashcardProgress(@Path("setId") id: String): List<FlashcardProgressDto>
 
     @GET("v1/cards/{cardId}/events") suspend fun events(@Path("cardId") cardId: String): List<EventDto>
     @GET("v1/notifications") suspend fun notifications(): List<NotificationDto>
