@@ -205,7 +205,7 @@ DELETE /v1/cards/{cardId}/invitations/{membershipId}
 
 - Owner or ACTIVE Admin may invite an existing User with `{ "userId": "uuid" }`. A new episode responds `201` with `{ "membershipId": "uuid", "userId": "uuid", "status": "INVITED", "role": "MEMBER" }`; an existing ACTIVE/INVITED membership responds `200` with its current membership representation unchanged. It references the invitee's created-or-reused member Card (AD-067/070). No duplicate membership, Card, or event is created for the idempotent case (AD-060/070).
 - Only the addressed invitee may view or respond to an invitation. Acceptance revalidates live persisted state and that the Course Space remains shared, then atomically changes `INVITED` to `ACTIVE`; decline changes it to `LEFT`. The same member Card is retained. INVITED grants no Course-Space access; acceptance grants only ordinary ACTIVE-member access.
-- The invitee's list endpoint returns only their own outstanding direct invitations; the item endpoint returns only the addressed invitation. Both expose the Course Space Card ID, membership ID, status, role, and creation time. Accept and decline return `200` with the updated membership representation; withdrawal returns `200` with `{ "status": "REMOVED" }`.
+- The invitee's list endpoint returns only their own outstanding direct invitations; the item endpoint returns only the addressed invitation. Both expose the Course Space Card ID, membership ID, status, role, and creation time. Accept and decline return `200` with the updated membership representation; withdrawal returns `200` with the updated membership representation (`status=REMOVED`).
 - Only the Owner may withdraw a pending invitation. Withdrawal changes `INVITED` to `REMOVED`; it grants no access and retains the episode/history. Admin withdrawal is forbidden (AD-068/070).
 - Invitation, acceptance, decline, and withdrawal emit `MEMBER_INVITED`, `MEMBER_INVITATION_ACCEPTED`, `MEMBER_INVITATION_DECLINED`, and `MEMBER_INVITATION_WITHDRAWN` respectively. Events are string-backed (AD-026/070).
 - These endpoints are distinct from `POST /v1/join/{shareToken}`, the public invite-link flow.
@@ -222,7 +222,7 @@ POST   /v1/cards/{cardId}/leave
 
 - Member statuses are exactly `INVITED`, `ACTIVE`, `LEFT`, `REMOVED`; `status` and `role` are separate axes. At most one ACTIVE/INVITED membership exists per `(cardId,userId)` (AD-060).
 - `card_membership` relates `cardId` to the Course Space Card, `userId` to the User, and `memberCardId` to that user's member Card. Historical LEFT/REMOVED episodes retain the Card link (AD-067).
-- Any ACTIVE member may list members. Response entries: `{ "userId": "uuid", "status": "ACTIVE|LEFT|REMOVED|INVITED", "role": "OWNER|ADMIN|MEMBER", "joinedAt": "ISO-8601" }`.
+- Any ACTIVE member may list members. Response entries: `{ "membershipId": "uuid", "cardId": "uuid", "userId": "uuid", "memberCardId": "uuid", "status": "ACTIVE|LEFT|REMOVED|INVITED", "role": "OWNER|ADMIN|MEMBER", "joinedAt": "ISO-8601" }`.
 - Only the Owner may promote/demote or remove a Member/Admin. Admins cannot promote, demote, or remove anyone. The Owner cannot be removed through this endpoint (AD-034/068).
 - Leave is self-initiated by an ACTIVE non-Owner. Owner leave returns `409 Conflict` until the Owner first transfers ownership or dissolves the Course Space (AD-042/063).
 

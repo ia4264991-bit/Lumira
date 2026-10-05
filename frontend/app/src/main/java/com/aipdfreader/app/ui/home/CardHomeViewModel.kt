@@ -3,8 +3,10 @@ package com.aipdfreader.app.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aipdfreader.app.data.remote.CardApi
+import com.aipdfreader.app.data.remote.DomainApi
 import com.aipdfreader.app.data.remote.dto.CardDto
 import com.aipdfreader.app.data.remote.dto.CreateCardRequest
+import com.aipdfreader.app.data.remote.dto.DirectInvitationDto
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +19,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 data class CardHomeUiState(
     val personalCards: List<CardDto> = emptyList(),
     val sharedCards: List<CardDto> = emptyList(),
+    val invitations: List<DirectInvitationDto> = emptyList(),
+    val invitationsLoading: Boolean = false,
+    val invitationActionMembershipId: String? = null,
+    val invitationMessage: String? = null,
+    val invitationError: Boolean = false,
     val loading: Boolean = false,
     val busy: Boolean = false,
     val message: String? = null,
@@ -24,13 +31,18 @@ data class CardHomeUiState(
 )
 
 @HiltViewModel
-class CardHomeViewModel @Inject constructor(private val cardApi: CardApi) : ViewModel() {
+class CardHomeViewModel @Inject constructor(private val cardApi: CardApi, private val domainApi: DomainApi) : ViewModel() {
     private val _state = MutableStateFlow(CardHomeUiState())
     val state: StateFlow<CardHomeUiState> = _state.asStateFlow()
 
     init { refresh() }
 
     fun refresh() {
+        refreshCards()
+        refreshInvitations()
+    }
+
+    private fun refreshCards() {
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, message = null, error = false)
             runCatching {
@@ -55,6 +67,27 @@ class CardHomeViewModel @Inject constructor(private val cardApi: CardApi) : View
         }
     }
 
+    private fun refreshInvitations() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(invitationsLoading = true, invitationMessage = null, invitationError = false)
+            runCatching { domainApi.myInvitations() }
+                .onSuccess { invitations ->
+                    _state.value = _state.value.copy(
+                        invitations = invitations,
+                        invitationsLoading = false,
+                        invitationMessage = null,
+                        invitationError = false
+                    )
+                }
+                .onFailure { failure ->
+                    _state.value = _state.value.copy(
+                        invitationsLoading = false,
+                        invitationMessage = failure.toUserMessage(),
+                        invitationError = true
+                    )
+                }
+        }
+    }
     fun createCard(name: String, color: String, asCourseSpace: Boolean) {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, message = null)
@@ -100,6 +133,38 @@ class CardHomeViewModel @Inject constructor(private val cardApi: CardApi) : View
         }
     }
 
+    fun acceptInvitation(membershipId: String) = respondToInvitation(membershipId, accept = true)
+
+    fun declineInvitation(membershipId: String) = respondToInvitation(membershipId, accept = false)
+
+    private fun respondToInvitation(membershipId: String, accept: Boolean) {
+        if (_state.value.invitationActionMembershipId != null) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                invitationActionMembershipId = membershipId,
+                invitationMessage = null,
+                invitationError = false
+            )
+            runCatching {
+                if (accept) domainApi.acceptInvitation(membershipId)
+                else domainApi.declineInvitation(membershipId)
+            }.onSuccess {
+                _state.value = _state.value.copy(
+                    invitations = _state.value.invitations.filterNot { it.membershipId == membershipId },
+                    invitationActionMembershipId = null,
+                    invitationMessage = if (accept) "Invitation accepted. Course Space added to your list." else "Invitation declined.",
+                    invitationError = false
+                )
+                if (accept) refreshCards()
+            }.onFailure { failure ->
+                _state.value = _state.value.copy(
+                    invitationActionMembershipId = null,
+                    invitationMessage = failure.toUserMessage(),
+                    invitationError = true
+                )
+            }
+        }
+    }
     private fun Throwable.toUserMessage(): String = when (this) {
         is HttpException -> when (code()) {
             401 -> "You’re signed in with Firebase, but this account isn’t linked to a Vision profile yet. Ask the project administrator to provision it."

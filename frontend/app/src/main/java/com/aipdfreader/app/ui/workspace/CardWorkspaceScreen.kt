@@ -183,6 +183,7 @@ fun CardWorkspaceScreen(
                     joinRequests = state.joinRequests,
                     callerRole = activeRole,
                     onInvite = { viewModel.inviteUser(cardId, it) },
+                    onWithdrawInvite = { viewModel.withdrawInvitation(cardId, it) },
                     onApprove = { viewModel.approveJoin(cardId, it) },
                     onReject = { viewModel.rejectJoin(cardId, it) },
                     onPromote = { viewModel.promoteMember(cardId, it) },
@@ -373,6 +374,7 @@ private fun PeopleSection(
     joinRequests: List<JoinRequestItemDto>,
     callerRole: String,
     onInvite: (String) -> Unit,
+    onWithdrawInvite: (String) -> Unit,
     onApprove: (String) -> Unit,
     onReject: (String) -> Unit,
     onPromote: (String) -> Unit,
@@ -387,6 +389,7 @@ private fun PeopleSection(
     var userId by remember { mutableStateOf("") }
     var confirmTransfer by remember { mutableStateOf<String?>(null) }
     var confirmDissolve by remember { mutableStateOf(false) }
+    var confirmWithdraw by remember { mutableStateOf<MemberDto?>(null) }
     if (confirmTransfer != null) AlertDialog(onDismissRequest = { confirmTransfer = null },
         title = { Text("Transfer ownership?") },
         text = { Text("You will become an Admin. This change takes effect immediately.") },
@@ -398,6 +401,11 @@ private fun PeopleSection(
         confirmButton = { Button(onClick = { onDissolve(); confirmDissolve = false }) { Text("Dissolve") } },
         dismissButton = { TextButton(onClick = { confirmDissolve = false }) { Text("Cancel") } })
 
+    if (confirmWithdraw != null) AlertDialog(onDismissRequest = { confirmWithdraw = null },
+        title = { Text("Withdraw invitation?") },
+        text = { Text("The invitee will no longer be able to accept this Course Space invitation.") },
+        confirmButton = { Button(onClick = { confirmWithdraw?.membershipId?.let(onWithdrawInvite); confirmWithdraw = null }) { Text("Withdraw") } },
+        dismissButton = { TextButton(onClick = { confirmWithdraw = null }) { Text("Cancel") } })
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp),
         contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
@@ -429,12 +437,15 @@ private fun PeopleSection(
             } }
         }
         if (members.isEmpty()) item { EmptyPanel("Active Course Space members will appear here.") }
-        else items(members, key = { it.userId }) { member ->
+        else items(members, key = { it.membershipId.ifBlank { "${it.userId}:${it.status}:${it.joinedAt.orEmpty()}" } }) { member ->
             Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp)) {
                 Text(member.userId, style = MaterialTheme.typography.bodyMedium)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("${member.role} · ${member.status}", modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    if (isOwner && member.status == "INVITED" && member.membershipId.isNotBlank()) {
+                        TextButton(onClick = { confirmWithdraw = member }) { Text("Withdraw invite") }
+                    }
                     if (isOwner && member.role != "OWNER" && member.status == "ACTIVE") {
                         TextButton(onClick = { if (member.role == "ADMIN") onDemote(member.userId) else onPromote(member.userId) }) {
                             Text(if (member.role == "ADMIN") "Demote" else "Promote")

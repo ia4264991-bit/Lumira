@@ -54,6 +54,10 @@ interface DomainApi {
     @POST("v1/cards/{cardId}/join-requests/{requestId}/approve") suspend fun approveJoin(@Path("cardId") cardId: String, @Path("requestId") requestId: String): CardDto
     @POST("v1/cards/{cardId}/join-requests/{requestId}/reject") suspend fun rejectJoin(@Path("cardId") cardId: String, @Path("requestId") requestId: String): JoinRequestStatusDto
     @POST("v1/cards/{cardId}/invitations") suspend fun invite(@Path("cardId") cardId: String, @Body body: InviteUserDto): DirectInvitationDto
+    @GET("v1/me/invitations") suspend fun myInvitations(): List<DirectInvitationDto>
+    @POST("v1/me/invitations/{membershipId}/accept") suspend fun acceptInvitation(@Path("membershipId") membershipId: String): DirectInvitationDto
+    @POST("v1/me/invitations/{membershipId}/decline") suspend fun declineInvitation(@Path("membershipId") membershipId: String): DirectInvitationDto
+    @DELETE("v1/cards/{cardId}/invitations/{membershipId}") suspend fun withdrawInvitation(@Path("cardId") cardId: String, @Path("membershipId") membershipId: String): DirectInvitationDto
     @POST("v1/cards/{cardId}/members/{userId}/promote") suspend fun promote(@Path("cardId") cardId: String, @Path("userId") userId: String): MemberDto
     @POST("v1/cards/{cardId}/members/{userId}/demote") suspend fun demote(@Path("cardId") cardId: String, @Path("userId") userId: String): MemberDto
     @DELETE("v1/cards/{cardId}/members/{userId}") suspend fun removeMember(@Path("cardId") cardId: String, @Path("userId") userId: String): MemberDto

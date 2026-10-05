@@ -212,6 +212,9 @@ class CardWorkspaceViewModel @Inject constructor(
     fun inviteUser(cardId: String, userId: String) = perform("Invitation sent", cardId) {
         domainApi.invite(cardId, InviteUserDto(userId.trim()))
     }
+    fun withdrawInvitation(cardId: String, membershipId: String) = perform("Invitation withdrawn", cardId) {
+        domainApi.withdrawInvitation(cardId, membershipId)
+    }
     fun approveJoin(cardId: String, requestId: String) = perform("Join request approved", cardId) { domainApi.approveJoin(cardId, requestId) }
     fun rejectJoin(cardId: String, requestId: String) = perform("Join request rejected", cardId) { domainApi.rejectJoin(cardId, requestId) }
     fun promoteMember(cardId: String, userId: String) = perform("Member promoted", cardId) { domainApi.promote(cardId, userId) }

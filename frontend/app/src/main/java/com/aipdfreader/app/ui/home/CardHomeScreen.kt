@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,11 +23,14 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -60,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aipdfreader.app.data.remote.dto.CardDto
+import com.aipdfreader.app.data.remote.dto.DirectInvitationDto
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,6 +79,7 @@ fun CardHomeScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var showCreate by remember { mutableStateOf(false) }
     var showJoin by remember { mutableStateOf(false) }
+    var showInvitations by remember { mutableStateOf(false) }
     val shared = selectedTab == 1
     val visibleCards = if (shared) state.sharedCards else state.personalCards.filterNot { it.isShared }
 
@@ -95,6 +101,15 @@ fun CardHomeScreen(
         )
     }
 
+    if (showInvitations) {
+        DirectInvitationInboxDialog(
+            state = state,
+            onDismiss = { showInvitations = false },
+            onAccept = viewModel::acceptInvitation,
+            onDecline = viewModel::declineInvitation,
+            onRefresh = viewModel::refresh
+        )
+    }
     Scaffold(
         topBar = {
             LargeTopAppBar(
@@ -109,6 +124,15 @@ fun CardHomeScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showInvitations = true }) {
+                        BadgedBox(badge = {
+                            if (state.invitations.isNotEmpty()) {
+                                Badge { Text(if (state.invitations.size > 9) "9+" else state.invitations.size.toString()) }
+                            }
+                        }) {
+                            Icon(Icons.Filled.MailOutline, contentDescription = "Course Space invitations")
+                        }
+                    }
                     IconButton(onClick = onOpenAccount) {
                         Icon(Icons.Filled.AccountCircle, contentDescription = "Account")
                     }
@@ -185,6 +209,84 @@ fun CardHomeScreen(
     }
 }
 
+@Composable
+private fun DirectInvitationInboxDialog(
+    state: CardHomeUiState,
+    onDismiss: () -> Unit,
+    onAccept: (String) -> Unit,
+    onDecline: (String) -> Unit,
+    onRefresh: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Course Space invitations") },
+        text = {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (state.invitationsLoading && state.invitations.isEmpty()) {
+                    item {
+                        Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                } else if (state.invitations.isEmpty()) {
+                    item {
+                        Column {
+                            Text(
+                                state.invitationMessage ?: "No pending invitations.",
+                                color = if (state.invitationError) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (state.invitationError) TextButton(onClick = onRefresh) { Text("Try again") }
+                        }
+                    }
+                } else {
+                    state.invitationMessage?.let { message ->
+                        item {
+                            Column {
+                                Text(
+                                    message,
+                                    color = if (state.invitationError) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.primary
+                                )
+                                if (state.invitationError) TextButton(onClick = onRefresh) { Text("Try again") }
+                            }
+                        }
+                    }
+                    items(state.invitations, key = { it.membershipId }) { invitation ->
+                        val responding = state.invitationActionMembershipId != null
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(14.dp)) {
+                                Text("You’ve been invited to a Course Space", style = MaterialTheme.typography.titleSmall)
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "Space ID ending in ${invitation.cardId.takeLast(8)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                invitation.createdAt?.substringBefore('T')?.takeIf { it.isNotBlank() }?.let { date ->
+                                    Text("Received $date", style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Row {
+                                    TextButton(enabled = !responding, onClick = { onAccept(invitation.membershipId) }) {
+                                        Text("Accept")
+                                    }
+                                    TextButton(enabled = !responding, onClick = { onDecline(invitation.membershipId) }) {
+                                        Text("Decline")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
+}
 @Composable
 private fun HomeWelcome(showingCourseSpaces: Boolean) {
     Card(modifier = Modifier.fillMaxWidth(),
