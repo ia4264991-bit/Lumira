@@ -34,9 +34,10 @@ class ContextualSarahViewModel @Inject constructor(
     private val resourceId: String = checkNotNull(savedState["resourceId"])
     private val cardId: String = checkNotNull(savedState["cardId"])
     private val highlightId: Long? = savedState.get<Long>("highlightId")?.takeIf { it >= 0 }
+    private val requestedPageIndex: Int? = savedState.get<Int>("pageIndex")?.takeIf { it >= 0 }
     private val conversationId: String = savedState.get<String>("conversationId")
         ?: UUID.randomUUID().toString().also { savedState["conversationId"] = it }
-    private val _state = MutableStateFlow(ContextualSarahState())
+    private val _state = MutableStateFlow(ContextualSarahState(pageIndex = requestedPageIndex))
     val state = _state.asStateFlow()
 
     init {

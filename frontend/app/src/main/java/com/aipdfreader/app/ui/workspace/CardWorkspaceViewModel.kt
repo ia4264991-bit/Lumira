@@ -9,6 +9,7 @@ import com.aipdfreader.app.data.remote.CardApi
 import com.aipdfreader.app.data.remote.DomainApi
 import com.aipdfreader.app.data.remote.dto.*
 import com.aipdfreader.app.data.repository.PdfRepository
+import com.aipdfreader.app.data.repository.LocalCardRepository
 import com.aipdfreader.app.util.FileUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -37,7 +39,9 @@ data class WorkspaceState(
     val loading: Boolean = false, val busy: Boolean = false, val notice: String? = null,
     val error: Boolean = false, val shareLink: String? = null, val usage: String? = null,
     val usageUsed: Int? = null, val usageLimit: Int? = null,
-    val shareApproval: Boolean? = null
+    val shareApproval: Boolean? = null,
+    val isLocalCard: Boolean = false,
+    val localResourcePaths: Map<String, String> = emptyMap()
 )
 
 @HiltViewModel
@@ -45,6 +49,7 @@ class CardWorkspaceViewModel @Inject constructor(
     private val domainApi: DomainApi,
     private val cardApi: CardApi,
     private val pdfRepository: PdfRepository,
+    private val localCardRepository: LocalCardRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val _state = MutableStateFlow(WorkspaceState())
@@ -53,6 +58,32 @@ class CardWorkspaceViewModel @Inject constructor(
     private var workspaceIsShared = false
 
     fun load(cardId: String, isShared: Boolean = false) {
+        if (cardId.startsWith("local:")) {
+            val localId = cardId.removePrefix("local:")
+            currentLocalCardId = localId
+            workspaceIsShared = false
+            viewModelScope.launch {
+                _state.value = WorkspaceState(loading = true, isLocalCard = true)
+                runCatching {
+                    val localMaterials = localCardRepository.observeMaterials(localId).first()
+                    val resources = localMaterials.map { material ->
+                        ResourceDto(material.id.toString(), material.displayName.substringBeforeLast('.', material.displayName),
+                            material.displayName, material.mimeType, "ON_THIS_PHONE", material.sizeBytes)
+                    }
+                    val notes = localCardRepository.observeNotes(localId).first().map { note ->
+                        NoteDto(note.id, note.title, note.content, note.updatedAtMillis.toString())
+                    }
+                    Triple(resources, notes, localMaterials.associate { it.id.toString() to it.filePath })
+                }.onSuccess { (resourceList, noteList, localPaths) ->
+                    _state.value = _state.value.copy(resources = resourceList, notes = noteList, loading = false,
+                        error = false, notice = "This Card and its files are saved on this phone.",
+                        localResourcePaths = localPaths)
+                }.onFailure { fail(it, loading = false) }
+            }
+            return
+        }
+        currentLocalCardId = ""
+        _state.value = _state.value.copy(isLocalCard = false)
         workspaceIsShared = isShared
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = false)
@@ -80,8 +111,20 @@ class CardWorkspaceViewModel @Inject constructor(
         }
     }
 
-    fun createNote(cardId: String, title: String, content: String) = perform("Note saved", cardId) { domainApi.createNote(cardId, NoteWriteDto(title, content)) }
-    fun updateNote(cardId: String, noteId: String, title: String, content: String) = perform("Note updated", cardId) { domainApi.updateNote(noteId, NoteWriteDto(title, content)) }
+    fun createNote(cardId: String, title: String, content: String) = if (cardId.startsWith("local:")) {
+        viewModelScope.launch {
+            runCatching { localCardRepository.saveNote(cardId.removePrefix("local:"), null, title.trim(), content) }
+                .onSuccess { load(cardId); _state.value = _state.value.copy(notice = "Note saved on this phone.") }
+                .onFailure { fail(it) }
+        }
+    } else perform("Note saved", cardId) { domainApi.createNote(cardId, NoteWriteDto(title, content)) }
+    fun updateNote(cardId: String, noteId: String, title: String, content: String) = if (cardId.startsWith("local:")) {
+        viewModelScope.launch {
+            runCatching { localCardRepository.saveNote(cardId.removePrefix("local:"), noteId, title.trim(), content) }
+                .onSuccess { load(cardId); _state.value = _state.value.copy(notice = "Note updated.") }
+                .onFailure { fail(it) }
+        }
+    } else perform("Note updated", cardId) { domainApi.updateNote(noteId, NoteWriteDto(title, content)) }
     fun createStudySet(cardId: String, title: String, description: String) = perform("Study Set saved", cardId) { domainApi.createStudySet(cardId, StudySetWriteDto(title, description)) }
     fun updateStudySet(cardId: String, id: String, title: String, description: String) = perform("Study Set updated", cardId) { domainApi.updateStudySet(id, StudySetWriteDto(title, description)) }
     fun deleteStudySet(cardId: String, id: String) = perform("Study Set deleted", cardId) { domainApi.deleteStudySet(id) }
@@ -92,7 +135,7 @@ class CardWorkspaceViewModel @Inject constructor(
     }
     fun createQuiz(cardId: String, title: String, prompt: String, correct: String, other: String) = perform("Quiz created", cardId) {
         domainApi.createQuiz(cardId, QuizWriteDto(title, "", listOf(QuizQuestionWriteDto(1, prompt,
-            listOf(QuizOptionWriteDto(1, correct, true), QuizOptionWriteDto(2, other, false)))))
+            listOf(QuizOptionWriteDto(1, correct, true), QuizOptionWriteDto(2, other, false))))))
     }
 
     fun createCourseLink(cardId: String) {
@@ -144,40 +187,113 @@ class CardWorkspaceViewModel @Inject constructor(
         }
     }
 
-    fun uploadPdf(cardId: String, uri: Uri) {
+    fun uploadResource(cardId: String, uri: Uri) {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, notice = null)
+            if (cardId.startsWith("local:")) {
+                val saved = runCatching { localCardRepository.addMaterial(cardId.removePrefix("local:"), uri) }.getOrDefault(false)
+                if (saved) {
+                    load(cardId)
+                    _state.value = _state.value.copy(busy = false, notice = "File saved to this Card on your phone.", error = false)
+                } else {
+                    _state.value = _state.value.copy(busy = false, notice = "Couldn’t save that file. Check that it is still available and try again.", error = true)
+                }
+                return@launch
+            }
             runCatching {
-                val copy = FileUtils.copyPdfToInternalStorage(context, uri) ?: error("We couldn’t read that PDF.")
+                val copy = FileUtils.copyMaterialToInternalStorage(context, uri)
+                    ?: error("We couldn’t read that file.")
                 try {
+                    val mimeType = FileUtils.mimeTypeForFileName(copy.displayName)
+                        ?: error("This file type isn’t supported yet. Use PDF, DOCX, PPTX, XLSX, CSV, TXT, PNG, JPEG, or WebP.")
                     val file = File(copy.path)
                     val part = MultipartBody.Part.createFormData("file", copy.displayName,
-                        file.asRequestBody("application/pdf".toMediaType()))
-                    domainApi.uploadResource(cardId, part, copy.displayName.removeSuffix(".pdf"))
+                        file.asRequestBody(mimeType.toMediaType()))
+                    domainApi.uploadResource(cardId, part, copy.displayName.substringBeforeLast('.', copy.displayName))
                 } finally { FileUtils.deleteFile(copy.path) }
             }.onSuccess {
-                _state.value = _state.value.copy(busy = false, notice = "PDF uploaded and processed")
+                _state.value = _state.value.copy(busy = false, notice = "File uploaded and processed")
                 load(cardId, workspaceIsShared)
             }.onFailure { fail(it, busy = false) }
         }
     }
 
-    fun openPdf(resource: ResourceDto, onOpened: (Long) -> Unit) {
+    fun openResource(
+        resource: ResourceDto,
+        onOpenPdf: (Long) -> Unit,
+        onOpenFile: (Uri, String) -> Unit
+    ) {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, notice = null)
+            if (workspaceIsLocalCard()) {
+                val localId = _state.value.resources.firstOrNull { it.id == resource.id }?.id?.toLongOrNull()
+                val material = localId?.let { localCardRepository.getMaterial(currentLocalCardId, it) }
+                if (material == null) {
+                    _state.value = _state.value.copy(busy = false, notice = "This saved file is no longer available.", error = true)
+                    return@launch
+                }
+                val file = File(material.filePath)
+                if (!file.isFile) {
+                    _state.value = _state.value.copy(busy = false, notice = "This saved file is no longer available.", error = true)
+                    return@launch
+                }
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                if (material.mimeType == "application/pdf" || material.displayName.endsWith(".pdf", true)) {
+                    val pdfId = pdfRepository.importPdf(uri)
+                    if (pdfId == null) _state.value = _state.value.copy(busy = false, notice = "This PDF couldn’t be opened.", error = true)
+                    else { _state.value = _state.value.copy(busy = false); onOpenPdf(pdfId) }
+                } else {
+                    _state.value = _state.value.copy(busy = false)
+                    onOpenFile(uri, material.mimeType)
+                }
+                return@launch
+            }
             runCatching {
                 val response = domainApi.downloadResource(resource.id)
-                val file = File(context.cacheDir, "${UUID.randomUUID()}.pdf")
-                response.byteStream().use { input -> file.outputStream().use(input::copyTo) }
+                val mimeType = resource.mimeType ?: "application/octet-stream"
+                val displayName = resource.originalFilename?.substringAfterLast('/')
+                    ?.replace(Regex("[^A-Za-z0-9._ -]"), "_")?.takeIf(String::isNotBlank)
+                    ?: "resource"
+                val file = File(context.cacheDir, "${UUID.randomUUID()}_$displayName")
+                try {
+                    response.byteStream().use { input -> file.outputStream().use(input::copyTo) }
+                } catch (error: Exception) {
+                    FileUtils.deleteFile(file.absolutePath)
+                    throw error
+                }
                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                pdfRepository.importPdf(uri) ?: error("The downloaded PDF couldn’t be opened.")
-            }.onSuccess { id -> _state.value = _state.value.copy(busy = false); onOpened(id) }
+                if (mimeType == "application/pdf" || displayName.endsWith(".pdf", ignoreCase = true)) {
+                    val id = pdfRepository.importPdf(uri)
+                        ?: error("The downloaded PDF couldn’t be opened.")
+                    FileUtils.deleteFile(file.absolutePath)
+                    DownloadedResource.Pdf(id)
+                } else {
+                    DownloadedResource.File(uri, mimeType)
+                }
+            }.onSuccess { opened ->
+                _state.value = _state.value.copy(busy = false)
+                when (opened) {
+                    is DownloadedResource.Pdf -> onOpenPdf(opened.id)
+                    is DownloadedResource.File -> onOpenFile(opened.uri, opened.mimeType)
+                }
+            }
                 .onFailure { fail(it, busy = false) }
         }
     }
 
+    private sealed interface DownloadedResource {
+        data class Pdf(val id: Long) : DownloadedResource
+        data class File(val uri: Uri, val mimeType: String) : DownloadedResource
+    }
+
     fun deleteNote(noteId: String, cardId: String) {
         viewModelScope.launch {
+            if (cardId.startsWith("local:")) {
+                runCatching { localCardRepository.deleteNote(cardId.removePrefix("local:"), noteId) }
+                    .onSuccess { load(cardId); _state.value = _state.value.copy(notice = "Note deleted.") }
+                    .onFailure { fail(it) }
+                return@launch
+            }
             runCatching { domainApi.deleteNote(noteId) }.onSuccess { _state.value = _state.value.copy(notice = "Note deleted"); load(cardId, workspaceIsShared) }
                 .onFailure { fail(it) }
         }
@@ -270,9 +386,12 @@ class CardWorkspaceViewModel @Inject constructor(
         val message = if (error is HttpException && error.code() == 401)
             "This Firebase account isn’t linked to a Vision profile yet. Ask the administrator to provision it."
         else if (error.message?.contains("failed to connect", true) == true)
-            "Couldn’t connect to Lumira. Check the backend URL and network."
+            "Couldn’t connect to Vision. Check the backend URL and network."
         else error.message?.takeIf { it.length < 180 } ?: "Something went wrong. Please try again."
         _state.value = _state.value.copy(notice = message, error = true,
             loading = loading ?: _state.value.loading, busy = busy ?: _state.value.busy)
     }
+
+    private var currentLocalCardId: String = ""
+    private fun workspaceIsLocalCard() = _state.value.isLocalCard
 }

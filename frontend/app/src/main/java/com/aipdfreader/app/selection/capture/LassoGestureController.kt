@@ -4,7 +4,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.changedToUp
-import androidx.compose.ui.input.pointer.consume
 import com.aipdfreader.app.selection.model.StrokePath
 import com.aipdfreader.app.selection.model.StrokePoint
 import com.aipdfreader.app.selection.model.ViewportSnapshot

@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">Vision</string>
+    <string name="push_notification_channel">Vision updates</string>
+    <string name="push_notification_channel_description">Updates about your Vision notifications</string>
+    <string name="push_notification_title">Vision</string>
+    <string name="push_notification_body">There’s an update. Open Notifications to view it.</string>
+    <string name="push_permission_title">Enable push notifications</string>
+    <string name="push_permission_description">Get notified when there are updates in Vision.</string>
+    <string name="push_permission_action">Enable notifications</string>
 </resources>

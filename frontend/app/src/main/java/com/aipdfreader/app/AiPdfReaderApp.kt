@@ -2,7 +2,10 @@ package com.aipdfreader.app
 
 import android.app.Application
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.aipdfreader.app.notifications.PushTokenLifecycle
+import com.aipdfreader.app.notifications.VisionMessagingService
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 
 /**
  * Application entry point.
@@ -12,9 +15,12 @@ import dagger.hilt.android.HiltAndroidApp
  */
 @HiltAndroidApp
 class AiPdfReaderApp : Application() {
+    @Inject lateinit var pushTokenLifecycle: PushTokenLifecycle
 
     override fun onCreate() {
         super.onCreate()
         PDFBoxResourceLoader.init(applicationContext)
+        VisionMessagingService.createNotificationChannel(this)
+        pushTokenLifecycle.start()
     }
 }

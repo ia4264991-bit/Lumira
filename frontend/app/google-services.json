@@ -1,32 +1,44 @@
 {
   "project_info": {
-    "project_number": "123456789012",
-    "project_id": "lumira-test",
-    "storage_bucket": "lumira-test.appspot.com"
+    "project_number": "191779141853",
+    "project_id": "vision-76c8b",
+    "storage_bucket": "vision-76c8b.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890",
+        "mobilesdk_app_id": "1:191779141853:android:571955f09e17ec9a734334",
         "android_client_info": {
           "package_name": "com.aipdfreader.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "191779141853-scotmpegbv0k7df25oh6afj44t958ns3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aipdfreader.app",
+            "certificate_hash": "e0e71ef751ecd8b14d85f129047d9c4272f6978b"
+          }
+        },
+        {
+          "client_id": "191779141853-er3frre4rojm5da4qq4u3hcke54qnbnn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyDummyKeyForBuildOnly1234567890"
+          "current_key": "AIzaSyClRAaHjLyLL8oQHgoUgUO3SxNhLt4Txig"
         }
       ],
       "services": {
-        "analytics_service": {
-          "status": 1
-        },
         "appinvite_service": {
-          "status": 1
-        },
-        "ads_service": {
-          "status": 2
+          "other_platform_oauth_client": [
+            {
+              "client_id": "191779141853-er3frre4rojm5da4qq4u3hcke54qnbnn.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

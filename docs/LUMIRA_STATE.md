@@ -24,13 +24,14 @@ a first-class workspace capability. The current architecture is recorded
 in `docs/DECISIONS.md` (AD-019 onward), consolidated in
 `docs/DOMAIN_MODEL.md`, and reflected in `API_CONTRACT.md`.
 
-## Current repository state (verified 2026-10-03)
+## Current repository state (verified 2026-10-05)
 
 | Area | Status |
 |---|---|
 | Backend | B0-B11 are committed locally. B11 Backend Integration + Security is at `c0287871c1593a559acc618088d8efda16742ae8` and passed PostgreSQL validation: 91 tests, 0 failures, 0 errors, 0 skipped. Summary generation is deferred under AD-081. Backend milestones are complete. |
 | Architecture | AD-066 through AD-077 define transfer, membership, sharing, deterministic account-deletion ownership succession, Notes/Study Sets, and the canonical Quiz/personal QuizAttempt model. B6 reuses AD-057 ownership and AD-045 sharing. |
-| Frontend | Android implementation is in progress: Firebase email/password sign-in, backend-backed Cards/Course Spaces, Card workspace features, contextual Sarah, Updates, notifications, and the existing PDF Reader are wired to the Vision API. Android Studio build/debug validation is pending. Firebase UID-to-Vision-user provisioning remains deferred under AD-082. See `frontend/README.md`. |
+| Frontend | Android implementation is in progress: Firebase email/password sign-in, backend-backed Cards/Course Spaces, contextual Sarah, Updates/notifications, multi-format local files, and the PDF Reader. AD-083 adds private offline Cards/materials/Notes, animated learner setup with a local profile/photo, home search, material previews, app sharing, and a feedback share-sheet flow. Online Cards retain their Make shared action. Debug APK build succeeds; phone UI/debug validation remains pending. Firebase UID provisioning and profile/feedback APIs remain deferred. See `frontend/README.md`. |
+| Push notifications | Android FCM client foundation is present: after sign-in it registers for an FCM installation ID, keeps ID refreshes in memory, and handles data-only event signals by opening the existing inbox. The API has no device-registration or push-payload contract, so backend delivery and end-to-end validation remain pending. |
 | API contract | Live and authoritative at the network boundary; B2-B6 endpoint contracts are maintained in `API_CONTRACT.md`. |
 | UX prototype | Standalone HTML/CSS/JS artifact exists outside this repository; it remains the product reference. |
 

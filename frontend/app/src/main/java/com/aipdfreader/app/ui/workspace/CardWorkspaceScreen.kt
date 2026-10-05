@@ -1,5 +1,9 @@
 package com.aipdfreader.app.ui.workspace
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
@@ -18,13 +22,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aipdfreader.app.data.remote.dto.*
+import com.aipdfreader.app.ui.components.MaterialThumbnail
 
-private val sections = listOf("Resources", "Notes", "Study Sets", "Quizzes", "Flashcards", "Sarah", "Updates", "People")
+private val sharedSections = listOf("Resources", "Notes", "Study Sets", "Quizzes", "Flashcards", "Sarah", "Updates", "People")
+private val localSections = listOf("Resources", "Notes")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +45,8 @@ fun CardWorkspaceScreen(
     viewModel: CardWorkspaceViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val sections = if (state.isLocalCard) localSections else sharedSections
+    val context = LocalContext.current
     var section by remember { mutableIntStateOf(0) }
     var dialog by remember { mutableStateOf<String?>(null) }
     var editingNote by remember { mutableStateOf<NoteDto?>(null) }
@@ -50,7 +59,7 @@ fun CardWorkspaceScreen(
     var activeRole by remember(callerRole) { mutableStateOf(callerRole) }
     val clipboard = LocalClipboardManager.current
     val pdfPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { viewModel.uploadPdf(cardId, it) }
+        uri?.let { viewModel.uploadResource(cardId, it) }
     }
     LaunchedEffect(cardId, sharedNow) { viewModel.load(cardId, sharedNow) }
 
@@ -112,7 +121,7 @@ fun CardWorkspaceScreen(
         TopAppBar(title = { Column { Text(cardName, maxLines = 1); Text(if (sharedNow) "Course Space" else "Card workspace", style = MaterialTheme.typography.labelMedium) } },
             navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
             actions = {
-                TextButton(onClick = { showSharing = true }) { Text(if (sharedNow) "Share" else "Make shared") }
+                if (!state.isLocalCard) TextButton(onClick = { showSharing = true }) { Text(if (sharedNow) "Share" else "Make shared") }
                 IconButton(onClick = { viewModel.load(cardId, sharedNow) }) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh") }
             })
     }) { padding ->
@@ -129,10 +138,23 @@ fun CardWorkspaceScreen(
                     style = MaterialTheme.typography.bodySmall)
             }
             when (section) {
-                0 -> ResourceSection(state.resources, state.busy,
-                    onUpload = { pdfPicker.launch(arrayOf("application/pdf")) },
-                    onOpen = { resource -> viewModel.openPdf(resource) { pdfId -> onOpenPdf(pdfId, resource.id) } },
-                    onGenerate = { type -> viewModel.generate(cardId, type, state.resources.map { it.id }) })
+                0 -> ResourceSection(state.resources, state.busy, state.localResourcePaths,
+                    onUpload = { pdfPicker.launch(arrayOf(
+                        "application/pdf",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "text/csv", "text/plain", "image/png", "image/jpeg", "image/webp"
+                    )) },
+                    onOpen = { resource ->
+                        viewModel.openResource(
+                            resource,
+                            onOpenPdf = { pdfId -> onOpenPdf(pdfId, resource.id) },
+                            onOpenFile = { uri, mimeType -> openResourceInPhone(context, uri, mimeType) }
+                        )
+                    },
+                    onGenerate = { type -> viewModel.generate(cardId, type, state.resources.map { it.id }) },
+                    allowGeneration = !state.isLocalCard)
                 1 -> ArtifactList("Notes", state.notes.map { it.title to it.content }, "Create note", { dialog = "note" }) {
                     state.notes.forEach { note ->
                         Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {
@@ -199,15 +221,16 @@ fun CardWorkspaceScreen(
 }
 
 @Composable
-private fun ResourceSection(resources: List<ResourceDto>, busy: Boolean, onUpload: () -> Unit,
-                            onOpen: (ResourceDto) -> Unit, onGenerate: (String) -> Unit) {
+private fun ResourceSection(resources: List<ResourceDto>, busy: Boolean, localPaths: Map<String, String>, onUpload: () -> Unit,
+                            onOpen: (ResourceDto) -> Unit, onGenerate: (String) -> Unit,
+                            allowGeneration: Boolean = true) {
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onUpload, enabled = !busy) { Icon(Icons.Filled.Add, null); Text(" Add PDF") }
+            Button(onClick = onUpload, enabled = !busy) { Icon(Icons.Filled.Add, null); Text(" Add file") }
             var showGenerate by remember { mutableStateOf(false) }
-            OutlinedButton(onClick = { showGenerate = true }, enabled = resources.isNotEmpty() && !busy) { Text("Sarah create") }
-            if (showGenerate) AlertDialog(onDismissRequest = { showGenerate = false }, title = { Text("Create from resources") },
-                text = { Text("Choose an artifact type for Sarah to generate from the PDFs in this Card.") },
+            if (allowGeneration) OutlinedButton(onClick = { showGenerate = true }, enabled = resources.isNotEmpty() && !busy) { Text("Sarah create") }
+            if (allowGeneration && showGenerate) AlertDialog(onDismissRequest = { showGenerate = false }, title = { Text("Create from resources") },
+                text = { Text("Choose an artifact type for Sarah to generate from the files in this Card.") },
                 confirmButton = { Column {
                     TextButton(onClick = { onGenerate("flashcardset"); showGenerate = false }) { Text("Flashcard Set") }
                     TextButton(onClick = { onGenerate("quiz"); showGenerate = false }) { Text("Quiz") }
@@ -215,20 +238,40 @@ private fun ResourceSection(resources: List<ResourceDto>, busy: Boolean, onUploa
                 } }, dismissButton = { TextButton(onClick = { showGenerate = false }) { Text("Cancel") } })
         }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-        if (resources.isEmpty()) EmptyPanel("Your PDFs will appear here after you add one.")
+        if (resources.isEmpty()) EmptyPanel("Your files will appear here after you add one.")
         else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(resources, key = { it.id }) { resource ->
-                Card(onClick = { if (resource.mimeType == "application/pdf") onOpen(resource) }, modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Card(onClick = { onOpen(resource) }, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        MaterialThumbnail(resource.originalFilename ?: resource.title, resource.mimeType ?: "application/octet-stream",
+                            localPaths[resource.id], Modifier.size(width = 72.dp, height = 92.dp))
+                        Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(resource.title, style = MaterialTheme.typography.titleMedium)
-                            Text("${resource.status} · ${resource.originalFilename.orEmpty()}", style = MaterialTheme.typography.bodySmall)
+                            Text(resource.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                            Text(resource.originalFilename.orEmpty(), style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            Text(if (resource.status == "ON_THIS_PHONE") "Available offline" else resource.status,
+                                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            TextButton(onClick = { onOpen(resource) }) { Text("Open") }
                         }
-                        if (resource.mimeType == "application/pdf") TextButton(onClick = { onOpen(resource) }) { Text("Open") }
                     }
                 }
             }
         }
+    }
+}
+
+private fun openResourceInPhone(context: android.content.Context, uri: Uri, mimeType: String) {
+    runCatching {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Open file"))
+    }.onFailure { error ->
+        val message = if (error is ActivityNotFoundException) "No app can open this file type yet."
+        else "Couldn't open this file."
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
 }
 

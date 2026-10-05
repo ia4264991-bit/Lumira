@@ -28,6 +28,18 @@ fun ContextualSarahScreen(onBack: () -> Unit, viewModel: ContextualSarahViewMode
                 Card(Modifier.fillMaxWidth()) { Text("Selected passage: $selected", Modifier.padding(12.dp),
                     style = MaterialTheme.typography.bodySmall, maxLines = 4) }
             }
+            state.pageIndex?.let { pageIndex ->
+                Text(
+                    if (state.selectedText.isNullOrBlank()) {
+                        "Page ${pageIndex + 1}. Sarah will use any text Vision extracted from this material; she can’t inspect the image itself."
+                    } else {
+                        "Page ${pageIndex + 1} of this material"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
             state.usage?.let { Text("Sarah usage: $it", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 8.dp)) }
             LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(state.messages) { (role, text) ->
@@ -39,7 +51,7 @@ fun ContextualSarahScreen(onBack: () -> Unit, viewModel: ContextualSarahViewMode
             }
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(value = state.draft, onValueChange = viewModel::setDraft, label = { Text("Ask about this PDF") },
+                OutlinedTextField(value = state.draft, onValueChange = viewModel::setDraft, label = { Text("Ask about this material") },
                     modifier = Modifier.weight(1f), maxLines = 4)
                 Button(onClick = viewModel::send, enabled = state.draft.isNotBlank() && !state.busy,
                     modifier = Modifier.padding(start = 8.dp)) { Text(if (state.busy) "…" else "Send") }

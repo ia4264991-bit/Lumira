@@ -760,6 +760,12 @@ closes the persistence-mechanism gap it explicitly left open.
 
 - **Revision note (2026-10-03)** — AD-082 makes Firebase Authentication the concrete provider beneath the existing backend authentication boundary. It defines the external Firebase UID to internal `app_user.id` mapping while preserving `AuthenticatedUser(UUID userId)`, AD-056, and AD-049–052. It does not define an onboarding/provisioning flow or implement Android/backend changes.
 
+- **AD-083 (additive Android client decision, 2026-10-05 — device-local offline study and learner profile)** — The Android client supports private, device-local Cards for study when a Vision API connection is unavailable. Their files and Notes are stored in Room and app-private storage, and remain available for local reading without internet. They are distinct from backend Cards and Course Spaces: they do not grant shared access, are not visible on another device, and are not automatically uploaded. Online backend Cards retain the existing server-controlled sharing action and can be turned into Course Spaces. A later sync/promote flow requires an explicit API and conflict-handling decision; no server ownership or sharing rule is changed here.
+
+  Learner onboarding collects a display name, learning goal, interests, experience level, daily study target, and optional profile photo after Firebase sign-up. Profile fields/photo are stored on the device, keyed by Firebase UID, until a trusted backend profile/provisioning contract is adopted. This UI does not provision a Vision `app_user`, change AD-082 identity mapping, or submit profile data to the API. Feedback is currently composed in the client and handed to the Android share sheet; a durable feedback submission endpoint remains future backend work.
+
+- **Revision note (2026-10-05)** — AD-083 records the explicitly requested Android offline and profile experience without changing the backend domain model or API. It supersedes only the prior deferral of client offline Cards/Notes; remote resource download/cache behavior remains separately deferred.
+
 - **Revision note (2026-10-02)** — AD-066 and AD-067 add the previously
   unspecified transfer result and member-Card relationship without
   changing the historical wording of AD-042 or AD-033. AD-068 resolves

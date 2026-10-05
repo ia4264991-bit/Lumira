@@ -32,6 +32,7 @@ class AuthRepository @Inject constructor(
     init { firebaseAuth.addAuthStateListener(authListener) }
 
     val currentUserEmail: String? get() = firebaseAuth.currentUser?.email
+    val currentUserId: String? get() = firebaseAuth.currentUser?.uid
 
     suspend fun login(email: String, password: String): AuthResult = authenticate {
         firebaseAuth.signInWithEmailAndPassword(email, password).await()

@@ -1,10 +1,18 @@
 package com.aipdfreader.app.ui.reader
 
+import android.content.ClipData
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Paint
+import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +25,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -29,6 +39,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Gesture
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -45,14 +56,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -64,6 +79,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -73,16 +90,28 @@ import com.aipdfreader.app.selection.geometry.FittedRect
 import com.aipdfreader.app.selection.model.SelectionPolygon
 import com.aipdfreader.app.selection.model.StrokePath
 import com.aipdfreader.app.selection.model.ViewportSnapshot
+import com.aipdfreader.app.selection.model.boundingBox
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.util.UUID
+import kotlin.math.ceil
+import kotlin.math.floor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(
     pdfId: Long,
     onBack: () -> Unit,
-    onAskAi: (highlightId: Long?, selectedText: String) -> Unit,
+    canAskSarahAboutResource: Boolean = false,
+    onAskAi: (highlightId: Long?, selectedText: String, pageIndex: Int) -> Unit,
     viewModel: ReaderViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -149,29 +178,70 @@ fun ReaderScreen(
                     // elsewhere). Wrapping it in `remember(viewModel)` gives
                     // it stable identity across recompositions (M1.4).
                     val onLassoStrokeCaptured = remember(viewModel) { viewModel::onLassoStrokeCaptured }
+                    val onLassoCornerMoved = remember(viewModel) { viewModel::moveLassoCorner }
                     ZoomablePdfPage(
                         bitmap = state.pageBitmap,
                         highlightCount = state.pageHighlights.size,
                         pageIndex = state.currentPage,
                         selectionTool = state.selectionTool,
+                        isRefiningLasso = state.isRefiningLasso,
                         lassoPolygon = state.lassoPolygon,
-                        onLassoStrokeCaptured = onLassoStrokeCaptured
+                        onLassoStrokeCaptured = onLassoStrokeCaptured,
+                        onLassoCornerMoved = onLassoCornerMoved
                     )
                 }
             }
 
-            if (state.selectionTool == SelectionTool.LASSO && state.currentSelection.isNotBlank()) {
-                // Reuses the exact same saveHighlight/onAskAi wiring the
-                // TEXT-mode panel below uses — no new highlight-saving or
-                // chat-routing logic is introduced for the lasso path.
+            if (state.selectionTool == SelectionTool.LASSO && state.isRefiningLasso) {
+                LassoRefinementActionBar(onDone = viewModel::finishLassoRefinement)
+            } else if (state.selectionTool == SelectionTool.LASSO && state.isResolvingLasso) {
+                LassoResolvingActionBar()
+            } else if (state.selectionTool == SelectionTool.LASSO && state.lassoPolygon != null) {
                 LassoSelectionActionBar(
                     selectedText = state.currentSelection,
-                    onHighlight = { viewModel.saveHighlight(onSaved = {}) },
-                    onAskAi = { text ->
-                        viewModel.saveHighlight(onSaved = { highlightId ->
-                            onAskAi(highlightId, text)
-                        })
+                    canAskSarahAboutResource = canAskSarahAboutResource,
+                    onRefine = viewModel::beginLassoRefinement,
+                    onShare = {
+                        val bitmap = state.pageBitmap
+                        val polygon = state.lassoPolygon
+                        if (bitmap != null && polygon != null) {
+                            scope.launch {
+                                runCatching {
+                                    val file = withContext(Dispatchers.IO) {
+                                        createLassoShareImage(bitmap, polygon, context.cacheDir)
+                                    }
+                                    val uri = FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        file
+                                    )
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "image/png"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        if (state.currentSelection.isNotBlank()) {
+                                            putExtra(Intent.EXTRA_TEXT, state.currentSelection)
+                                        }
+                                        clipData = ClipData.newUri(context.contentResolver, "PDF selection", uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(sendIntent, "Share selection"))
+                                }.onFailure {
+                                    Toast.makeText(context, "Couldn’t prepare that selection to share.", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
                     },
+                    onHighlight = { if (state.currentSelection.isNotBlank()) viewModel.saveHighlight(onSaved = {}) },
+                    onAskAi = { text ->
+                        if (text.isBlank()) {
+                            onAskAi(null, "", state.currentPage)
+                        } else {
+                            viewModel.saveHighlight(onSaved = { highlightId ->
+                                onAskAi(highlightId, text, state.currentPage)
+                            })
+                        }
+                    },
+                    onAskPage = { onAskAi(null, "", state.currentPage) },
                     onDismiss = viewModel::clearLassoPolygon
                 )
             }
@@ -183,7 +253,7 @@ fun ReaderScreen(
                     onSelectionChanged = viewModel::onSelectionChanged,
                     onAskAi = { text ->
                         viewModel.saveHighlight(onSaved = { highlightId ->
-                            onAskAi(highlightId, text)
+                            onAskAi(highlightId, text, state.currentPage)
                         })
                     },
                     onSave = { viewModel.saveHighlight(onSaved = {}) }
@@ -193,7 +263,7 @@ fun ReaderScreen(
             if (state.pageHighlights.isNotEmpty()) {
                 HighlightRow(
                     highlights = state.pageHighlights,
-                    onAskAboutHighlight = { onAskAi(it.id, it.selectedText) },
+                    onAskAboutHighlight = { onAskAi(it.id, it.selectedText, it.pageIndex) },
                     onDelete = viewModel::deleteHighlight
                 )
             }
@@ -259,8 +329,10 @@ private fun ZoomablePdfPage(
     highlightCount: Int,
     pageIndex: Int,
     selectionTool: SelectionTool,
+    isRefiningLasso: Boolean,
     lassoPolygon: SelectionPolygon?,
-    onLassoStrokeCaptured: (StrokePath) -> Unit
+    onLassoStrokeCaptured: (StrokePath) -> Unit,
+    onLassoCornerMoved: (Int, Float, Float) -> Unit
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -283,12 +355,20 @@ private fun ZoomablePdfPage(
         label = "lassoPolygonAlpha"
     )
 
+    LaunchedEffect(isRefiningLasso) {
+        if (isRefiningLasso) {
+            scale = 1f
+            offsetX = 0f
+            offsetY = 0f
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFE8E8E8))
             .clip(androidx.compose.ui.graphics.RectangleShape)
-            .pointerInput(bitmap, selectionTool) {
+            .pointerInput(bitmap, selectionTool, isRefiningLasso) {
                 when (selectionTool) {
                     SelectionTool.TEXT -> {
                         detectTransformGestures { _, pan, zoom, _ ->
@@ -301,6 +381,16 @@ private fun ZoomablePdfPage(
                     }
 
                     SelectionTool.LASSO -> {
+                        if (isRefiningLasso) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    if (event.changes.none { it.pressed }) break
+                                }
+                            }
+                            return@pointerInput
+                        }
                         lassoGestureController.detectLassoGesture(
                             scope = this,
                             pageIndex = pageIndex,
@@ -375,6 +465,14 @@ private fun ZoomablePdfPage(
                     bitmapWidthPx = bmp.width.toFloat(),
                     bitmapHeightPx = bmp.height.toFloat()
                 )
+                if (isRefiningLasso && lassoPolygon != null) {
+                    LassoRefinementHandlesOverlay(
+                        polygon = lassoPolygon,
+                        bitmapWidthPx = bmp.width.toFloat(),
+                        bitmapHeightPx = bmp.height.toFloat(),
+                        onCornerMoved = onLassoCornerMoved
+                    )
+                }
             }
         }
 
@@ -451,6 +549,92 @@ private fun PolygonOverlay(
     }
 }
 
+/** Four touch handles let the reader adjust the rough lasso after drawing it. */
+@Composable
+private fun LassoRefinementHandlesOverlay(
+    polygon: SelectionPolygon,
+    bitmapWidthPx: Float,
+    bitmapHeightPx: Float,
+    onCornerMoved: (Int, Float, Float) -> Unit
+) {
+    val latestPolygon by rememberUpdatedState(polygon)
+    val latestOnCornerMoved by rememberUpdatedState(onCornerMoved)
+    val density = LocalDensity.current
+    Canvas(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                var activeHandle = -1
+                val hitRadius = with(density) { 48.dp.toPx() }
+                detectDragGestures(
+                    onDragStart = { down ->
+                        val current = latestPolygon
+                        if (current == null) {
+                            activeHandle = -1
+                        } else {
+                            val fit = fittedPageRect(size.width.toFloat(), size.height.toFloat(), bitmapWidthPx, bitmapHeightPx)
+                            val handles = selectionHandlePositions(current, fit)
+                            activeHandle = handles.indices.minByOrNull { index ->
+                                val dx = handles[index].x - down.x
+                                val dy = handles[index].y - down.y
+                                dx * dx + dy * dy
+                            } ?: -1
+                            if (activeHandle >= 0) {
+                                val dx = handles[activeHandle].x - down.x
+                                val dy = handles[activeHandle].y - down.y
+                                if (dx * dx + dy * dy > hitRadius * hitRadius) activeHandle = -1
+                            }
+                        }
+                    },
+                    onDrag = { change, _ ->
+                        if (activeHandle >= 0) {
+                            change.consume()
+                            val fit = fittedPageRect(size.width.toFloat(), size.height.toFloat(), bitmapWidthPx, bitmapHeightPx)
+                            if (fit.width > 0f && fit.height > 0f) {
+                                latestOnCornerMoved(
+                                    activeHandle,
+                                    ((change.position.x - fit.left) / fit.width).coerceIn(0f, 1f),
+                                    ((change.position.y - fit.top) / fit.height).coerceIn(0f, 1f)
+                                )
+                            }
+                        }
+                    },
+                    onDragEnd = { activeHandle = -1 },
+                    onDragCancel = { activeHandle = -1 }
+                )
+            }
+    ) {
+        val fit = fittedPageRect(size.width, size.height, bitmapWidthPx, bitmapHeightPx)
+        selectionHandlePositions(polygon, fit).forEach { handle ->
+            drawCircle(Color.White, radius = 13.dp.toPx(), center = handle)
+            drawCircle(LassoColor, radius = 13.dp.toPx(), center = handle, style = Stroke(width = 3.dp.toPx()))
+        }
+    }
+}
+
+private fun fittedPageRect(viewportWidth: Float, viewportHeight: Float, bitmapWidth: Float, bitmapHeight: Float): FittedRect =
+    FittedRect.of(
+        ViewportSnapshot(
+            scale = 1f,
+            offsetX = 0f,
+            offsetY = 0f,
+            viewportWidthPx = viewportWidth,
+            viewportHeightPx = viewportHeight,
+            bitmapWidthPx = bitmapWidth,
+            bitmapHeightPx = bitmapHeight
+        )
+    )
+
+private fun selectionHandlePositions(polygon: SelectionPolygon, fit: FittedRect): List<Offset> {
+    val bounds = polygon.boundingBox()
+    return listOf(
+        Offset(fit.left + bounds.left * fit.width, fit.top + bounds.top * fit.height),
+        Offset(fit.left + bounds.right * fit.width, fit.top + bounds.top * fit.height),
+        Offset(fit.left + bounds.right * fit.width, fit.top + bounds.bottom * fit.height),
+        Offset(fit.left + bounds.left * fit.width, fit.top + bounds.bottom * fit.height)
+    )
+}
+
 /**
  * Draws the in-progress raw stroke directly — a 1:1 draw in outer viewport
  * pixels, no coordinate mapping (see [ZoomablePdfPage]'s KDoc for why).
@@ -488,47 +672,109 @@ private fun LiveStrokeOverlay(path: Path, version: Int) {
     }
 }
 
-/**
- * Shown once a lasso stroke has resolved to non-blank text. Reuses the
- * exact same actions (`saveHighlight`, the `onAskAi` navigation callback)
- * the long-press [SelectableTextPanel] already exposes — this composable
- * only presents them, it does not implement anything new for highlighting
- * or chat routing (M1.3 requirement 6/7).
- */
+@Composable
+private fun LassoRefinementActionBar(onDone: () -> Unit) {
+    Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Drag a corner to refine the area", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Button(onClick = onDone) { Text("Done") }
+        }
+    }
+}
+
+@Composable
+private fun LassoResolvingActionBar() {
+    Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CircularProgressIndicator(Modifier.width(20.dp).height(20.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(10.dp))
+            Text("Updating selection…", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+/** Actions available after the refined region has been confirmed. */
 @Composable
 private fun LassoSelectionActionBar(
     selectedText: String,
+    canAskSarahAboutResource: Boolean,
+    onRefine: () -> Unit,
+    onShare: () -> Unit,
     onHighlight: () -> Unit,
     onAskAi: (String) -> Unit,
+    onAskPage: () -> Unit,
     onDismiss: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
             Text(
-                text = "\u201C${selectedText.take(40)}${if (selectedText.length > 40) "…" else ""}\u201D",
+                text = if (selectedText.isBlank()) "Area selected · no searchable text found"
+                else "\u201C${selectedText.take(70)}${if (selectedText.length > 70) "…" else ""}\u201D",
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
+                overflow = TextOverflow.Ellipsis
             )
-            IconButton(onClick = onDismiss, modifier = Modifier.height(36.dp)) {
-                Icon(Icons.Filled.Close, contentDescription = "Dismiss selection", modifier = Modifier.height(18.dp))
-            }
-            TextButton(onClick = onHighlight) {
-                Text("Highlight")
-            }
-            Button(onClick = { onAskAi(selectedText) }) {
-                Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.height(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Ask Sarah")
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = onRefine) { Text("Adjust") }
+                IconButton(onClick = onShare, modifier = Modifier.height(40.dp)) {
+                    Icon(Icons.Filled.Share, contentDescription = "Share selected area")
+                }
+                if (selectedText.isNotBlank()) {
+                    TextButton(onClick = onHighlight) { Text("Highlight") }
+                    Button(onClick = { onAskAi(selectedText) }) {
+                        Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.height(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Ask Sarah")
+                    }
+                } else if (canAskSarahAboutResource) {
+                    TextButton(onClick = onAskPage) { Text("Ask Sarah about page") }
+                }
+                IconButton(onClick = onDismiss, modifier = Modifier.height(36.dp)) {
+                    Icon(Icons.Filled.Close, contentDescription = "Dismiss selection", modifier = Modifier.height(18.dp))
+                }
             }
         }
+    }
+}
+
+private fun createLassoShareImage(source: Bitmap, polygon: SelectionPolygon, cacheDirectory: File): File {
+    val bounds = polygon.boundingBox()
+    val left = floor(bounds.left.coerceIn(0f, 1f) * source.width).toInt().coerceIn(0, source.width - 1)
+    val top = floor(bounds.top.coerceIn(0f, 1f) * source.height).toInt().coerceIn(0, source.height - 1)
+    val right = ceil(bounds.right.coerceIn(0f, 1f) * source.width).toInt().coerceIn(left + 1, source.width)
+    val bottom = ceil(bounds.bottom.coerceIn(0f, 1f) * source.height).toInt().coerceIn(top + 1, source.height)
+    val cropped = Bitmap.createBitmap(right - left, bottom - top, Bitmap.Config.ARGB_8888)
+    try {
+        val mask = android.graphics.Path().apply {
+            polygon.points.forEachIndexed { index, point ->
+                val x = point.u.coerceIn(0f, 1f) * source.width - left
+                val y = point.v.coerceIn(0f, 1f) * source.height - top
+                if (index == 0) moveTo(x, y) else lineTo(x, y)
+            }
+            close()
+        }
+        val canvas = android.graphics.Canvas(cropped)
+        canvas.clipPath(mask)
+        canvas.drawBitmap(source, -left.toFloat(), -top.toFloat(), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        val directory = File(cacheDirectory, "lasso-shares").apply { mkdirs() }
+        val file = File(directory, "selection-${UUID.randomUUID()}.png")
+        file.outputStream().use { cropped.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        return file
+    } finally {
+        cropped.recycle()
     }
 }
 

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aipdfreader.app.data.repository.AuthRepository
 import com.aipdfreader.app.data.repository.AuthResult
+import com.aipdfreader.app.data.repository.LearnerProfileStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +24,8 @@ data class LoginUiState(
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val profileStore: LearnerProfileStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -31,6 +33,10 @@ class LoginViewModel @Inject constructor(
 
     /** True if a session already exists — lets the caller skip straight past login. */
     val isAlreadyAuthenticated: Boolean get() = authRepository.isLoggedIn.value
+
+    fun continueAuthenticated(onSuccess: (Boolean) -> Unit) {
+        onSuccess(profileStore.current() == null)
+    }
 
     fun onEmailChanged(value: String) {
         _uiState.value = _uiState.value.copy(email = value, errorMessage = null)
@@ -47,7 +53,7 @@ class LoginViewModel @Inject constructor(
         )
     }
 
-    fun submit(onSuccess: () -> Unit) {
+    fun submit(onSuccess: (Boolean) -> Unit) {
         val state = _uiState.value
         if (state.email.isBlank() || state.password.isBlank()) {
             _uiState.value = state.copy(errorMessage = "Enter both an email and a password.")
@@ -66,7 +72,7 @@ class LoginViewModel @Inject constructor(
             when (result) {
                 AuthResult.Success -> {
                     _uiState.value = _uiState.value.copy(isSubmitting = false)
-                    onSuccess()
+                    onSuccess(state.mode == AuthMode.REGISTER || profileStore.current() == null)
                 }
                 is AuthResult.Failure -> {
                     _uiState.value = _uiState.value.copy(isSubmitting = false, errorMessage = result.message)

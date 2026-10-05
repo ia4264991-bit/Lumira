@@ -16,7 +16,9 @@ import com.aipdfreader.app.selection.geometry.PolygonBuilder
 import com.aipdfreader.app.selection.geometry.StrokeSimplifier
 import com.aipdfreader.app.selection.model.SelectionPolygon
 import com.aipdfreader.app.selection.model.SelectionResult
+import com.aipdfreader.app.selection.model.NormalizedPoint
 import com.aipdfreader.app.selection.model.StrokePath
+import com.aipdfreader.app.selection.model.boundingBox
 import com.aipdfreader.app.selection.textlayout.TextLayoutCache
 import com.aipdfreader.app.ui.theme.AmberHighlight
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -57,7 +59,9 @@ data class ReaderUiState(
      * per M1.3 requirement 3, for any future consumer that wants the full
      * result (matched blocks, bounding rect) rather than just the text.
      */
-    val lassoSelectionResult: SelectionResult? = null
+    val lassoSelectionResult: SelectionResult? = null,
+    val isRefiningLasso: Boolean = false,
+    val isResolvingLasso: Boolean = false
 )
 
 private const val PDF_ID_ARG = "pdfId"
@@ -132,26 +136,20 @@ class ReaderViewModel @Inject constructor(
                 selectionTool = tool,
                 lassoPolygon = null,
                 lassoSelectionResult = null,
-                currentSelection = ""
+                currentSelection = "",
+                isRefiningLasso = false,
+                isResolvingLasso = false
             )
         }
     }
 
     /**
-     * Entry point for a finalized lasso gesture. Runs the M1.0 geometry
-     * pipeline (simplify → map → build) to get a polygon, then — new in
-     * M1.3 — resolves that polygon into actual selected text by fetching
-     * the current page's layout from the existing [TextLayoutCache] and
-     * handing both to the existing [SelectionEngine], completely unchanged
-     * from how M1.2 left them.
+     * Entry point for a finalized lasso gesture. Runs the geometry pipeline
+     * and opens the adjustable selection handles. Text resolution waits
+     * until the user confirms the refined area.
      *
-     * [SelectionResult.selectedText] is routed into [onSelectionChanged] —
-     * the exact same entry point the long-press text panel already uses —
-     * so highlighting, Ask AI, and everything downstream of "the user has
-     * selected some text" work identically regardless of which tool
-     * produced that text. Nothing about matching, intersection, or overlap
-     * thresholds is reimplemented here; this function only orchestrates
-     * calls to existing, unmodified components.
+     * Once confirmed, [SelectionResult.selectedText] is routed through the
+     * same selection state used by the long-press text panel.
      */
     fun onLassoStrokeCaptured(stroke: StrokePath) {
         selectionResolutionJob?.cancel()
@@ -170,35 +168,112 @@ class ReaderViewModel @Inject constructor(
                 return@launch
             }
 
-            // Show the drawn shape immediately via the existing overlay
-            // system, before resolution finishes, so drawing feels
-            // immediate regardless of how long matching takes.
-            _uiState.update { it.copy(lassoPolygon = polygon) }
+            // Keep the exact stroke visible and editable before resolving
+            // text, so the user can refine the region first.
+            _uiState.update {
+                it.copy(
+                    lassoPolygon = polygon,
+                    lassoSelectionResult = null,
+                    currentSelection = "",
+                    isRefiningLasso = true,
+                    isResolvingLasso = false
+                )
+            }
+        }
+    }
 
+    fun beginLassoRefinement() {
+        selectionResolutionJob?.cancel()
+        _uiState.update {
+            if (it.lassoPolygon == null) it else it.copy(
+                currentSelection = "",
+                lassoSelectionResult = null,
+                isRefiningLasso = true,
+                isResolvingLasso = false
+            )
+        }
+    }
+
+    /** Adjusts one of the selection's four resize corners while preserving its freeform outline. */
+    fun moveLassoCorner(cornerIndex: Int, u: Float, v: Float) {
+        val current = _uiState.value
+        val polygon = current.lassoPolygon ?: return
+        if (!current.isRefiningLasso || cornerIndex !in 0..3) return
+
+        val bounds = polygon.boundingBox()
+        val left = bounds.left.coerceIn(0f, 1f)
+        val top = bounds.top.coerceIn(0f, 1f)
+        val right = bounds.right.coerceIn(left, 1f)
+        val bottom = bounds.bottom.coerceIn(top, 1f)
+        val minimumEdge = 0.001f
+        val targetU = u.coerceIn(0f, 1f)
+        val targetV = v.coerceIn(0f, 1f)
+
+        val newBounds = when (cornerIndex) {
+            0 -> listOf(
+                targetU.coerceIn(0f, (right - minimumEdge).coerceAtLeast(0f)),
+                targetV.coerceIn(0f, (bottom - minimumEdge).coerceAtLeast(0f)),
+                right, bottom
+            )
+            1 -> listOf(
+                left,
+                targetV.coerceIn(0f, (bottom - minimumEdge).coerceAtLeast(0f)),
+                targetU.coerceIn((left + minimumEdge).coerceAtMost(1f), 1f), bottom
+            )
+            2 -> listOf(
+                left, top,
+                targetU.coerceIn((left + minimumEdge).coerceAtMost(1f), 1f),
+                targetV.coerceIn((top + minimumEdge).coerceAtMost(1f), 1f)
+            )
+            else -> listOf(
+                targetU.coerceIn(0f, (right - minimumEdge).coerceAtLeast(0f)), top,
+                right,
+                targetV.coerceIn((top + minimumEdge).coerceAtMost(1f), 1f)
+            )
+        }
+        val oldWidth = (right - left).coerceAtLeast(minimumEdge)
+        val oldHeight = (bottom - top).coerceAtLeast(minimumEdge)
+        val newLeft = newBounds[0]
+        val newTop = newBounds[1]
+        val newWidth = (newBounds[2] - newLeft).coerceAtLeast(minimumEdge)
+        val newHeight = (newBounds[3] - newTop).coerceAtLeast(minimumEdge)
+        val adjustedPoints = polygon.points.map { point ->
+            NormalizedPoint(
+                u = (newLeft + (point.u - left) / oldWidth * newWidth).coerceIn(newLeft, newBounds[2]),
+                v = (newTop + (point.v - top) / oldHeight * newHeight).coerceIn(newTop, newBounds[3])
+            )
+        }
+        _uiState.update { state ->
+            if (state.lassoPolygon != polygon || !state.isRefiningLasso) state
+            else state.copy(lassoPolygon = SelectionPolygon(polygon.pageIndex, adjustedPoints))
+        }
+    }
+
+    fun finishLassoRefinement() {
+        val polygon = _uiState.value.lassoPolygon ?: return
+        selectionResolutionJob?.cancel()
+        _uiState.update { it.copy(isRefiningLasso = false, isResolvingLasso = true) }
+        selectionResolutionJob = viewModelScope.launch(Dispatchers.Default) {
             try {
-                val layout = textLayoutCache.getContentLayout(pdfId, stroke.pageIndex)
+                val layout = textLayoutCache.getContentLayout(pdfId, polygon.pageIndex)
                 val result = selectionEngine.resolve(polygon, layout)
-
-                _uiState.update { it.copy(lassoSelectionResult = result) }
-                onSelectionChanged(result.selectedText)
+                _uiState.update { state ->
+                    if (state.lassoPolygon != polygon) state else state.copy(
+                        lassoSelectionResult = result,
+                        currentSelection = result.selectedText,
+                        isResolvingLasso = false
+                    )
+                }
             } catch (e: CancellationException) {
-                // M1.4 structured-concurrency fix: this coroutine is
-                // cancelled (a new stroke started, the tool changed, or the
-                // page changed) precisely when its result would be stale.
-                // A bare `catch (e: Exception)` here would have swallowed
-                // this and still run the cleanup below, potentially
-                // clearing state a *newer*, still-running resolution had
-                // already set — rethrowing lets cancellation actually stop
-                // this coroutine instead of racing with the one that
-                // superseded it.
                 throw e
-            } catch (e: Exception) {
-                // Resolution failed (e.g. layout extraction error). Fail
-                // gracefully per M1.3 requirement 9: clear the temporary
-                // lasso state quietly rather than surfacing a page-level
-                // error — the rest of the reader (current page, highlights,
-                // chat) is completely unaffected.
-                clearLassoState()
+            } catch (_: Exception) {
+                _uiState.update { state ->
+                    if (state.lassoPolygon != polygon) state else state.copy(
+                        lassoSelectionResult = null,
+                        currentSelection = "",
+                        isResolvingLasso = false
+                    )
+                }
             }
         }
     }
@@ -206,7 +281,13 @@ class ReaderViewModel @Inject constructor(
     /** Resets every piece of lasso-selection state at once — used by both the failure path above and [clearLassoPolygon]. */
     private fun clearLassoState() {
         _uiState.update {
-            it.copy(lassoPolygon = null, lassoSelectionResult = null, currentSelection = "")
+            it.copy(
+                lassoPolygon = null,
+                lassoSelectionResult = null,
+                currentSelection = "",
+                isRefiningLasso = false,
+                isResolvingLasso = false
+            )
         }
     }
 
@@ -260,7 +341,9 @@ class ReaderViewModel @Inject constructor(
                 isLoadingPage = true,
                 lassoPolygon = null,
                 lassoSelectionResult = null,
-                currentSelection = ""
+                currentSelection = "",
+                isRefiningLasso = false,
+                isResolvingLasso = false
             )
         }
 
@@ -289,7 +372,9 @@ class ReaderViewModel @Inject constructor(
                         // than resetting currentSelection alone).
                         lassoPolygon = null,
                         lassoSelectionResult = null,
-                        currentSelection = ""
+                        currentSelection = "",
+                        isRefiningLasso = false,
+                        isResolvingLasso = false
                     )
                 }
             } catch (e: CancellationException) {

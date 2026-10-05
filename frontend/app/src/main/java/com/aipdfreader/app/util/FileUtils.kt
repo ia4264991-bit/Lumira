@@ -15,6 +15,34 @@ import java.util.UUID
  */
 object FileUtils {
 
+    fun queryDisplayName(context: Context, uri: Uri): String? {
+        var name: String? = null
+        val cursor: Cursor? = context.contentResolver.query(uri, null, null, null, null)
+        cursor?.use {
+            val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (it.moveToFirst() && nameIndex >= 0) name = it.getString(nameIndex)
+        }
+        return name
+    }
+
+    fun resolveMimeType(context: Context, uri: Uri, displayName: String? = queryDisplayName(context, uri)): String {
+        val fromExtension = mimeTypeForFileName(displayName.orEmpty())
+        return fromExtension ?: context.contentResolver.getType(uri) ?: "application/octet-stream"
+    }
+
+    fun mimeTypeForFileName(displayName: String): String? = when (displayName.substringAfterLast('.', "").lowercase()) {
+            "pdf" -> "application/pdf"
+            "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            "csv" -> "text/csv"
+            "txt" -> "text/plain"
+            "png" -> "image/png"
+            "jpg", "jpeg" -> "image/jpeg"
+            "webp" -> "image/webp"
+            else -> null
+        }
+
     suspend fun copyPdfToInternalStorage(context: Context, uri: Uri): CopiedFile? =
         withContext(Dispatchers.IO) {
             try {
@@ -34,17 +62,33 @@ object FileUtils {
             }
         }
 
-    private fun queryDisplayName(context: Context, uri: Uri): String? {
-        var name: String? = null
-        val cursor: Cursor? = context.contentResolver.query(uri, null, null, null, null)
-        cursor?.use {
-            val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (it.moveToFirst() && nameIndex >= 0) {
-                name = it.getString(nameIndex)
+    suspend fun copyMaterialToInternalStorage(context: Context, uri: Uri): CopiedFile? =
+        withContext(Dispatchers.IO) {
+            var destination: File? = null
+            try {
+                val displayName = queryDisplayName(context, uri)
+                    ?.substringAfterLast('/')
+                    ?.substringAfterLast('\\')
+                    ?.takeIf(String::isNotBlank)
+                    ?: "material"
+                val directory = File(context.filesDir, "materials").apply { mkdirs() }
+                val safeFileName = displayName.replace(Regex("[^A-Za-z0-9._ -]"), "_")
+                val destinationFile = File(directory, "${UUID.randomUUID()}_$safeFileName")
+                destination = destinationFile
+                val inputStream = context.contentResolver.openInputStream(uri)
+                if (inputStream == null) {
+                    destinationFile.delete()
+                    return@withContext null
+                }
+                inputStream.use { input ->
+                    destinationFile.outputStream().use { output -> input.copyTo(output) }
+                }
+                CopiedFile(destinationFile.absolutePath, displayName, destinationFile.length())
+            } catch (_: Exception) {
+                destination?.delete()
+                null
             }
         }
-        return name
-    }
 
     fun deleteFile(path: String) {
         runCatching { File(path).delete() }
