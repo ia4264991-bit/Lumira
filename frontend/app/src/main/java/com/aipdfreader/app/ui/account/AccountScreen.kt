@@ -1,9 +1,9 @@
 package com.aipdfreader.app.ui.account
 
 import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -77,7 +77,7 @@ fun AccountScreen(
     val context = LocalContext.current
     var showNameEditor by remember { mutableStateOf(false) }
     var editedName by remember(state.profile?.name) { mutableStateOf(state.profile?.name.orEmpty()) }
-    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri?.let(viewModel::setPhoto)
     }
 
@@ -114,7 +114,9 @@ fun AccountScreen(
                             style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
                     }
                 }
-                TextButton(onClick = { photoPicker.launch(arrayOf("image/*")) }) {
+                TextButton(onClick = {
+                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }) {
                     Icon(Icons.Filled.AddAPhoto, contentDescription = null)
                     Text("  Change photo")
                 }

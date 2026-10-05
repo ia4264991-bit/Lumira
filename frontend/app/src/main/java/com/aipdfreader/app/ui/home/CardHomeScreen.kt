@@ -3,6 +3,15 @@ package com.aipdfreader.app.ui.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +57,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -69,6 +79,7 @@ import android.content.Intent
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -99,13 +110,18 @@ fun CardHomeScreen(
         CardDto(id = "local:${local.id}", ownerId = local.ownerUid, name = local.name,
             color = local.color, isShared = false, role = "OWNER")
     }
-    val allVisibleCards = if (shared) state.sharedCards else state.personalCards.filterNot { it.isShared } + localCards
+    val mirroredCardIds = state.localCards.mapNotNull { it.remoteCardId }.toSet()
+    val allVisibleCards = if (shared) state.sharedCards else
+        state.personalCards.filterNot { it.isShared || it.id in mirroredCardIds } + localCards
     val visibleCards = allVisibleCards.filter { it.name.contains(searchQuery.trim(), ignoreCase = true) }
+    val hasCards = if (shared) state.sharedCards.isNotEmpty()
+        else state.personalCards.any { !it.isShared } || localCards.isNotEmpty()
     val context = LocalContext.current
 
     if (showCreate) {
         CreateCardDialog(
             busy = state.busy,
+            startAsCourseSpace = shared,
             onDismiss = { showCreate = false },
             onCreate = { name, color, courseSpace ->
                 viewModel.createCard(name, color, courseSpace)
@@ -188,7 +204,7 @@ fun CardHomeScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showCreate = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "Create Card")
+                Icon(Icons.Filled.Add, contentDescription = if (shared) "Create Course Space" else "Create Card")
             }
         },
         bottomBar = {
@@ -208,7 +224,17 @@ fun CardHomeScreen(
                 top = padding.calculateTopPadding() + 12.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            item { HomeWelcome(shared) }
+            item {
+                HomeWelcome(
+                    showingCourseSpaces = shared,
+                    learnerName = state.learnerName,
+                    hasCards = hasCards,
+                    onCreateCard = { showCreate = true },
+                    onBrowseFiles = onOpenLibrary,
+                    onJoinCourseSpace = { showJoin = true },
+                    onCreateCourseSpace = { showCreate = true }
+                )
+            }
             item {
                 OutlinedTextField(
                     value = searchQuery,
@@ -235,9 +261,13 @@ fun CardHomeScreen(
                 }
             }
             if (state.loading && visibleCards.isEmpty()) {
-                item { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                } }
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Checking your online Cards…", style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    }
+                }
             } else if (state.error && visibleCards.isEmpty()) {
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
@@ -347,22 +377,71 @@ private fun DirectInvitationInboxDialog(
     )
 }
 @Composable
-private fun HomeWelcome(showingCourseSpaces: Boolean) {
-    Card(modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-        Row(Modifier.padding(horizontal = 18.dp, vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(if (showingCourseSpaces) "Study is better together" else "Pick up where you left off",
-                    style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Spacer(Modifier.height(6.dp))
-                Text(if (showingCourseSpaces) "Your shared Cards and study materials, all in one place."
-                else "Keep each subject and its materials together in a Card.",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-            }
-            Box(Modifier.padding(start = 12.dp).size(52.dp).clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = .7f)), contentAlignment = Alignment.Center) {
-                Icon(if (showingCourseSpaces) Icons.Filled.Groups else Icons.Filled.AutoStories,
-                    contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+private fun HomeWelcome(
+    showingCourseSpaces: Boolean,
+    learnerName: String,
+    hasCards: Boolean,
+    onCreateCard: () -> Unit,
+    onBrowseFiles: () -> Unit,
+    onJoinCourseSpace: () -> Unit,
+    onCreateCourseSpace: () -> Unit
+) {
+    val firstName = learnerName.trim().substringBefore(' ').takeIf(String::isNotBlank)
+    val greeting = firstName?.let { "Welcome, $it" } ?: "Welcome to Vision"
+    val transition = rememberInfiniteTransition(label = "home-welcome-icon")
+    val floatDp by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 5f,
+        animationSpec = infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "welcome-icon-float"
+    )
+    AnimatedVisibility(visible = true, enter = fadeIn(tween(500)) + slideInVertically(tween(500)) { it / 8 }) {
+        Card(modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(greeting, style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            if (showingCourseSpaces) "Share ideas, materials, and study time with your people."
+                            else "A bright little space for everything you’re learning.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    Box(
+                        Modifier.padding(start = 12.dp).size(62.dp).graphicsLayer {
+                            translationY = floatDp.dp.toPx()
+                        }.clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = .75f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(if (showingCourseSpaces) Icons.Filled.Groups else Icons.Filled.AutoStories,
+                            contentDescription = null, tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp))
+                    }
+                }
+                if (!hasCards) {
+                    Spacer(Modifier.height(14.dp))
+                    if (showingCourseSpaces) {
+                        Text("Your own Cards still work offline. Shared spaces need a connection.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Button(onClick = onJoinCourseSpace) { Text("Join a space") }
+                            TextButton(onClick = onCreateCourseSpace) { Text("Create one") }
+                        }
+                    } else {
+                        Text("Create a Card on this phone and keep studying without internet.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Button(onClick = onCreateCard) { Text("Create a Card") }
+                            TextButton(onClick = onBrowseFiles) { Text("Browse files") }
+                        }
+                    }
+                }
             }
         }
     }
@@ -423,9 +502,14 @@ private val cardColorChoices = listOf(
 )
 
 @Composable
-private fun CreateCardDialog(busy: Boolean, onDismiss: () -> Unit, onCreate: (String, String, Boolean) -> Unit) {
+private fun CreateCardDialog(
+    busy: Boolean,
+    startAsCourseSpace: Boolean,
+    onDismiss: () -> Unit,
+    onCreate: (String, String, Boolean) -> Unit
+) {
     var name by remember { mutableStateOf("") }
-    var shared by remember { mutableStateOf(false) }
+    var shared by remember { mutableStateOf(startAsCourseSpace) }
     var selectedColor by remember { mutableStateOf(cardColorChoices.first().hex) }
     AlertDialog(onDismissRequest = onDismiss,
         title = { Text(if (shared) "Create Course Space" else "Create Card") },
@@ -460,15 +544,19 @@ private fun CreateCardDialog(busy: Boolean, onDismiss: () -> Unit, onCreate: (St
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Share as a Course Space", style = MaterialTheme.typography.bodyMedium)
-                        Text("Invite others to study together", style = MaterialTheme.typography.bodySmall,
+                        Text(if (shared) "Share as a Course Space" else "Private Card, ready offline",
+                            style = MaterialTheme.typography.bodyMedium)
+                        Text(if (shared) "Invite others to study together" else "Saved on this phone first; syncs when Vision’s server is available",
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(checked = shared, onCheckedChange = { shared = it })
                 }
             }
         },
-        confirmButton = { Button(enabled = name.isNotBlank() && !busy, onClick = { onCreate(name, selectedColor, shared) }) {
+        confirmButton = { Button(enabled = name.isNotBlank() && !busy, onClick = {
+            onCreate(name, selectedColor, shared)
+        }) {
             Text(if (busy) "Creating…" else "Create")
         } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })

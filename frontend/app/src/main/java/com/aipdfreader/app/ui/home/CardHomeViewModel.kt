@@ -13,6 +13,9 @@ import com.aipdfreader.app.data.remote.dto.CreateCardRequest
 import com.aipdfreader.app.data.remote.dto.DirectInvitationDto
 import com.aipdfreader.app.data.local.entity.LocalCardEntity
 import com.aipdfreader.app.data.repository.LocalCardRepository
+import com.aipdfreader.app.data.repository.LearnerProfileStore
+import com.aipdfreader.app.data.sync.LocalCardSyncScheduler
+import com.aipdfreader.app.util.BackendConfiguration
 import kotlinx.coroutines.async
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withTimeoutOrNull
 import retrofit2.HttpException
 import javax.inject.Inject
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,7 +40,8 @@ data class CardHomeUiState(
     val loading: Boolean = false,
     val busy: Boolean = false,
     val message: String? = null,
-    val error: Boolean = false
+    val error: Boolean = false,
+    val learnerName: String = ""
 )
 
 @HiltViewModel
@@ -44,12 +49,15 @@ class CardHomeViewModel @Inject constructor(
     private val cardApi: CardApi,
     private val domainApi: DomainApi,
     private val localCardRepository: LocalCardRepository,
+    private val syncScheduler: LocalCardSyncScheduler,
+    learnerProfileStore: LearnerProfileStore,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
-    private val _state = MutableStateFlow(CardHomeUiState())
+    private val _state = MutableStateFlow(CardHomeUiState(learnerName = learnerProfileStore.current()?.name.orEmpty()))
     val state: StateFlow<CardHomeUiState> = _state.asStateFlow()
 
     init {
+        syncScheduler.enqueue()
         refresh()
         viewModelScope.launch {
             localCardRepository.observeCards().collect { cards ->
@@ -66,12 +74,45 @@ class CardHomeViewModel @Inject constructor(
     private fun refreshCards() {
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, message = null, error = false)
-            try {
-                val (personal, shared) = supervisorScope {
-                    val personalRequest = async { cardApi.listCards() }
-                    val sharedRequest = async { cardApi.listCards("shared") }
-                    personalRequest.await() to sharedRequest.await()
+            if (!BackendConfiguration.isConfigured) {
+                _state.value = _state.value.copy(
+                    loading = false,
+                    message = "Your Cards and files stay on this phone. Online Cards and AI study tools will be available when Vision’s server is deployed."
+                )
+                return@launch
+            }
+            if (!hasValidatedInternet()) {
+                _state.value = _state.value.copy(loading = false)
+                return@launch
+            }
+            val result = try {
+                withTimeoutOrNull(8_000) {
+                    supervisorScope {
+                        val personalRequest = async { cardApi.listCards() }
+                        val sharedRequest = async { cardApi.listCards("shared") }
+                        personalRequest.await() to sharedRequest.await()
+                    }
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _state.value = _state.value.copy(
+                    loading = false,
+                    message = "Couldn’t load online Cards. Cards saved on this phone are still ready to study.",
+                    error = false
+                )
+                return@launch
+            }
+            if (result == null) {
+                _state.value = _state.value.copy(
+                    loading = false,
+                    message = "Online Cards are unavailable right now. Cards saved on this phone are still ready to study.",
+                    error = false
+                )
+                return@launch
+            }
+            try {
+                val (personal, shared) = result
                 _state.value = _state.value.copy(
                     personalCards = personal,
                     sharedCards = shared,
@@ -81,11 +122,11 @@ class CardHomeViewModel @Inject constructor(
                 )
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (failure: Exception) {
+            } catch (_: Exception) {
                 _state.value = _state.value.copy(
                     loading = false,
-                    message = failure.toUserMessage(),
-                    error = true
+                    message = "Couldn’t load online Cards. Cards saved on this phone are still ready to study.",
+                    error = false
                 )
             }
         }
@@ -93,6 +134,14 @@ class CardHomeViewModel @Inject constructor(
 
     private fun refreshInvitations() {
         viewModelScope.launch {
+            if (!BackendConfiguration.isConfigured) {
+                _state.value = _state.value.copy(invitationsLoading = false, invitationError = false)
+                return@launch
+            }
+            if (!hasValidatedInternet()) {
+                _state.value = _state.value.copy(invitationsLoading = false, invitationError = false)
+                return@launch
+            }
             _state.value = _state.value.copy(invitationsLoading = true, invitationMessage = null, invitationError = false)
             runCatching { domainApi.myInvitations() }
                 .onSuccess { invitations ->
@@ -115,40 +164,55 @@ class CardHomeViewModel @Inject constructor(
     fun createCard(name: String, color: String, asCourseSpace: Boolean) {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, message = null)
-            if (!hasValidatedInternet()) {
-                if (asCourseSpace) {
-                    _state.value = _state.value.copy(
-                        busy = false,
-                        message = "Course Spaces need an internet connection. Save a personal Card on this phone for offline study.",
-                        error = true
-                    )
-                    return@launch
-                }
-                runCatching { localCardRepository.createCard(name, color) }
-                    .onSuccess {
-                        _state.value = _state.value.copy(
-                            busy = false,
-                            message = "Card saved on this phone. Add materials now; they’ll be available offline.",
-                            error = false
-                        )
-                    }
-                    .onFailure { failure ->
-                        _state.value = _state.value.copy(busy = false, message = failure.message, error = true)
-                    }
+            if (!asCourseSpace) {
+                saveLocalCard(
+                    name,
+                    color,
+                    "Card saved on this phone. It stays ready offline and will sync when Vision’s server is available."
+                )
                 return@launch
             }
-            runCatching {
-                val card = cardApi.createCard(CreateCardRequest(name.trim(), color))
-                if (asCourseSpace) {
+            if (!BackendConfiguration.isConfigured || !hasValidatedInternet()) {
+                _state.value = _state.value.copy(
+                    busy = false,
+                    message = "Course Spaces need Vision’s server and an internet connection. You can create a private Card now and use it offline.",
+                    error = true
+                )
+                return@launch
+            }
+            val onlineCreated = try {
+                withTimeoutOrNull(8_000) {
+                    val card = cardApi.createCard(CreateCardRequest(name.trim(), color))
                     cardApi.enableSharing(card.id)
                     cardApi.createShareLink(card.id)
+                    true
                 }
-            }.onSuccess {
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            }
+            if (onlineCreated == true) {
                 _state.value = _state.value.copy(busy = false)
                 refresh()
-            }.onFailure { failure ->
-                _state.value = _state.value.copy(busy = false, message = failure.toUserMessage(), error = true)
+            } else {
+                _state.value = _state.value.copy(
+                    busy = false,
+                    message = "Vision’s server did not respond. You can create a private Card now and use it offline.",
+                    error = true
+                )
             }
+        }
+    }
+
+    private suspend fun saveLocalCard(name: String, color: String, successMessage: String) {
+        try {
+            localCardRepository.createCard(name, color)
+            _state.value = _state.value.copy(busy = false, message = successMessage, error = false)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            _state.value = _state.value.copy(busy = false, message = failure.message ?: "Couldn’t save this Card on your phone.", error = true)
         }
     }
 
@@ -164,6 +228,13 @@ class CardHomeViewModel @Inject constructor(
         val token = linkOrToken.trim().trimEnd('/').substringAfterLast('/')
         if (token.isBlank()) {
             _state.value = _state.value.copy(message = "Enter a Course Space invite link or token.", error = true)
+            return
+        }
+        if (!BackendConfiguration.isConfigured) {
+            _state.value = _state.value.copy(
+                message = "Joining a Course Space will be available when Vision’s server is deployed.",
+                error = true
+            )
             return
         }
         viewModelScope.launch {

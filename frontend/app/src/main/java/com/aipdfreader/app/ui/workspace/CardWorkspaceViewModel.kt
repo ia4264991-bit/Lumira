@@ -11,6 +11,7 @@ import com.aipdfreader.app.data.remote.dto.*
 import com.aipdfreader.app.data.repository.PdfRepository
 import com.aipdfreader.app.data.repository.LocalCardRepository
 import com.aipdfreader.app.util.FileUtils
+import com.aipdfreader.app.util.BackendConfiguration
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
@@ -41,7 +42,23 @@ data class WorkspaceState(
     val usageUsed: Int? = null, val usageLimit: Int? = null,
     val shareApproval: Boolean? = null,
     val isLocalCard: Boolean = false,
-    val localResourcePaths: Map<String, String> = emptyMap()
+    val canUseServerFeatures: Boolean = false,
+    val localResourcePaths: Map<String, String> = emptyMap(),
+    val remoteCardId: String? = null,
+    val remoteResourceIdsByLocalId: Map<String, String> = emptyMap()
+)
+
+private data class LocalWorkspaceSnapshot(
+    val resources: List<ResourceDto>,
+    val notes: List<NoteDto>,
+    val localPaths: Map<String, String>,
+    val remoteCardId: String?,
+    val remoteResourceIds: Map<String, String>,
+    val canUseServerFeatures: Boolean,
+    val studySets: List<StudySetDto>,
+    val quizzes: List<QuizDto>,
+    val flashcardSets: List<FlashcardSetDto>,
+    val events: List<EventDto>
 )
 
 @HiltViewModel
@@ -65,6 +82,8 @@ class CardWorkspaceViewModel @Inject constructor(
             viewModelScope.launch {
                 _state.value = WorkspaceState(loading = true, isLocalCard = true)
                 runCatching {
+                    val localCard = localCardRepository.getCard(localId)
+                        ?: error("This Card is no longer available on this phone.")
                     val localMaterials = localCardRepository.observeMaterials(localId).first()
                     val resources = localMaterials.map { material ->
                         ResourceDto(material.id.toString(), material.displayName.substringBeforeLast('.', material.displayName),
@@ -73,11 +92,46 @@ class CardWorkspaceViewModel @Inject constructor(
                     val notes = localCardRepository.observeNotes(localId).first().map { note ->
                         NoteDto(note.id, note.title, note.content, note.updatedAtMillis.toString())
                     }
-                    Triple(resources, notes, localMaterials.associate { it.id.toString() to it.filePath })
-                }.onSuccess { (resourceList, noteList, localPaths) ->
-                    _state.value = _state.value.copy(resources = resourceList, notes = noteList, loading = false,
+                    val canUseServerFeatures = localCard.remoteCardId != null && BackendConfiguration.isConfigured && hasValidatedInternet()
+                    val remoteStudySets = if (canUseServerFeatures)
+                        async { runCatching { domainApi.studySets(localCard.remoteCardId) }.getOrDefault(emptyList()) }
+                    else async { emptyList() }
+                    val remoteQuizzes = if (canUseServerFeatures)
+                        async { runCatching { domainApi.quizzes(localCard.remoteCardId) }.getOrDefault(emptyList()) }
+                    else async { emptyList() }
+                    val remoteFlashcards = if (canUseServerFeatures)
+                        async { runCatching { domainApi.flashcardSets(localCard.remoteCardId) }.getOrDefault(emptyList()) }
+                    else async { emptyList() }
+                    val remoteEvents = if (canUseServerFeatures)
+                        async { runCatching { domainApi.events(localCard.remoteCardId) }.getOrDefault(emptyList()) }
+                    else async { emptyList() }
+                    LocalWorkspaceSnapshot(
+                        resources = resources,
+                        notes = notes,
+                        localPaths = localMaterials.associate { it.id.toString() to it.filePath },
+                        remoteCardId = localCard.remoteCardId,
+                        canUseServerFeatures = canUseServerFeatures,
+                        remoteResourceIds = localMaterials.mapNotNull { material ->
+                            material.remoteResourceId?.let { material.id.toString() to it }
+                        }.toMap(),
+                        studySets = remoteStudySets.await(),
+                        quizzes = remoteQuizzes.await(),
+                        flashcardSets = remoteFlashcards.await(),
+                        events = remoteEvents.await()
+                    )
+                }.onSuccess { local ->
+                    _state.value = _state.value.copy(loading = false,
                         error = false, notice = "This Card and its files are saved on this phone.",
-                        localResourcePaths = localPaths)
+                        localResourcePaths = local.localPaths,
+                        resources = local.resources,
+                        notes = local.notes,
+                        studySets = local.studySets,
+                        quizzes = local.quizzes,
+                        flashcardSets = local.flashcardSets,
+                        events = local.events,
+                        remoteCardId = local.remoteCardId,
+                        canUseServerFeatures = local.canUseServerFeatures,
+                        remoteResourceIdsByLocalId = local.remoteResourceIds)
                 }.onFailure { fail(it, loading = false) }
             }
             return
@@ -125,16 +179,18 @@ class CardWorkspaceViewModel @Inject constructor(
                 .onFailure { fail(it) }
         }
     } else perform("Note updated", cardId) { domainApi.updateNote(noteId, NoteWriteDto(title, content)) }
-    fun createStudySet(cardId: String, title: String, description: String) = perform("Study Set saved", cardId) { domainApi.createStudySet(cardId, StudySetWriteDto(title, description)) }
+    fun createStudySet(cardId: String, title: String, description: String) = performOnCard("Study Set saved", cardId) { remoteId ->
+        domainApi.createStudySet(remoteId, StudySetWriteDto(title, description))
+    }
     fun updateStudySet(cardId: String, id: String, title: String, description: String) = perform("Study Set updated", cardId) { domainApi.updateStudySet(id, StudySetWriteDto(title, description)) }
     fun deleteStudySet(cardId: String, id: String) = perform("Study Set deleted", cardId) { domainApi.deleteStudySet(id) }
     fun deleteQuiz(cardId: String, id: String) = perform("Quiz deleted", cardId) { domainApi.deleteQuiz(id) }
     fun deleteFlashcardSet(cardId: String, id: String) = perform("Flashcard Set deleted", cardId) { domainApi.deleteFlashcardSet(id) }
-    fun createFlashcardSet(cardId: String, title: String, front: String, back: String) = perform("Flashcard Set saved", cardId) {
-        domainApi.createFlashcardSet(cardId, FlashcardSetWriteDto(title, "", listOf(FlashcardWriteDto(1, front, back))))
+    fun createFlashcardSet(cardId: String, title: String, front: String, back: String) = performOnCard("Flashcard Set saved", cardId) { remoteId ->
+        domainApi.createFlashcardSet(remoteId, FlashcardSetWriteDto(title, "", listOf(FlashcardWriteDto(1, front, back))))
     }
-    fun createQuiz(cardId: String, title: String, prompt: String, correct: String, other: String) = perform("Quiz created", cardId) {
-        domainApi.createQuiz(cardId, QuizWriteDto(title, "", listOf(QuizQuestionWriteDto(1, prompt,
+    fun createQuiz(cardId: String, title: String, prompt: String, correct: String, other: String) = performOnCard("Quiz created", cardId) { remoteId ->
+        domainApi.createQuiz(remoteId, QuizWriteDto(title, "", listOf(QuizQuestionWriteDto(1, prompt,
             listOf(QuizOptionWriteDto(1, correct, true), QuizOptionWriteDto(2, other, false))))))
     }
 
@@ -345,10 +401,18 @@ class CardWorkspaceViewModel @Inject constructor(
     fun sendSarah(cardId: String, question: String) {
         val previous = _state.value.messages
         viewModelScope.launch {
+            val remoteId = resolveRemoteCardId(cardId)
+            if (remoteId == null) {
+                _state.value = _state.value.copy(
+                    notice = "Your files are ready offline. Sarah will be available after this Card syncs with Vision’s server.",
+                    error = true
+                )
+                return@launch
+            }
             _state.value = _state.value.copy(busy = true, notice = null,
                 messages = previous + SarahMessage("user", question))
             runCatching {
-                domainApi.askSarah(cardId, SarahAskDto(conversationId, question,
+                domainApi.askSarah(remoteId, SarahAskDto(conversationId, question,
                     previous.map { SarahHistoryItem(it.role, it.content) }))
             }.onSuccess { answer ->
                 _state.value = _state.value.copy(busy = false,
@@ -361,8 +425,27 @@ class CardWorkspaceViewModel @Inject constructor(
 
     fun generate(cardId: String, type: String, resources: List<String>) {
         viewModelScope.launch {
+            val remoteId = resolveRemoteCardId(cardId)
+            if (remoteId == null) {
+                _state.value = _state.value.copy(
+                    notice = "Your Card and files are saved offline. Sarah can generate study materials after Vision’s server is available and the Card syncs.",
+                    error = true
+                )
+                return@launch
+            }
+            val remoteResourceIds = if (cardId.startsWith("local:")) {
+                val mappings = _state.value.remoteResourceIdsByLocalId
+                resources.mapNotNull(mappings::get)
+            } else resources
+            if (remoteResourceIds.isEmpty() || remoteResourceIds.size != resources.size) {
+                _state.value = _state.value.copy(
+                    notice = "These files are still waiting to sync. Sarah can use them as soon as the upload finishes.",
+                    error = true
+                )
+                return@launch
+            }
             _state.value = _state.value.copy(busy = true, notice = null)
-            runCatching { domainApi.generateWithSarah(cardId, SarahGenerateDto(type, resources)) }
+            runCatching { domainApi.generateWithSarah(remoteId, SarahGenerateDto(type, remoteResourceIds)) }
                 .onSuccess { result ->
                     _state.value = _state.value.copy(busy = false,
                         notice = "Sarah created a ${result.artifactType}. Usage: ${result.usageUsed} / ${result.usageLimit} this month")
@@ -380,6 +463,32 @@ class CardWorkspaceViewModel @Inject constructor(
             }
                 .onFailure { fail(it, busy = false) }
         }
+    }
+
+    private fun <T> performOnCard(success: String, cardId: String, block: suspend (String) -> T) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true, notice = null)
+            runCatching {
+                val remoteId = resolveRemoteCardId(cardId)
+                    ?: error("This Card is ready offline. This action will work after the Vision server is available and the Card syncs.")
+                block(remoteId)
+            }.onSuccess {
+                _state.value = _state.value.copy(busy = false, notice = success, error = false)
+                load(cardId, workspaceIsShared)
+            }.onFailure { fail(it, busy = false) }
+        }
+    }
+
+    private suspend fun resolveRemoteCardId(cardId: String): String? = if (cardId.startsWith("local:")) {
+        localCardRepository.getCard(cardId.removePrefix("local:"))?.remoteCardId
+    } else cardId
+
+    private fun hasValidatedInternet(): Boolean {
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return false
+        val network = manager.activeNetwork ?: return false
+        val capabilities = manager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     private fun fail(error: Throwable, loading: Boolean? = null, busy: Boolean? = null) {

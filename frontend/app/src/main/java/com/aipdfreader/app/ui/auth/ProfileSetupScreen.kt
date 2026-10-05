@@ -2,6 +2,7 @@ package com.aipdfreader.app.ui.auth
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -115,7 +116,7 @@ fun ProfileSetupScreen(
     var minutes by remember { mutableIntStateOf(10) }
     var error by remember { mutableStateOf<String?>(null) }
     var photoUri by remember { mutableStateOf<Uri?>(null) }
-    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri?.let { photoUri = it; viewModel.setPhoto(it) }
     }
     val progress by animateFloatAsState((step + 1) / 5f, tween(420, easing = FastOutSlowInEasing), label = "setup-progress")
@@ -174,7 +175,9 @@ fun ProfileSetupScreen(
                                     AsyncImage(model = uri, contentDescription = "Selected profile photo",
                                         modifier = Modifier.size(60.dp).clip(CircleShape), contentScale = ContentScale.Crop)
                                 }
-                                TextButton(onClick = { photoPicker.launch(arrayOf("image/*")) }) {
+                                TextButton(onClick = {
+                                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                }) {
                                     Icon(Icons.Filled.AddAPhoto, contentDescription = null)
                                     Text("  Add a profile photo (optional)")
                                 }

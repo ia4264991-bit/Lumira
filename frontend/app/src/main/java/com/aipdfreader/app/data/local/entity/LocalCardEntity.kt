@@ -11,7 +11,8 @@ data class LocalCardEntity(
     val ownerUid: String,
     val name: String,
     val color: String,
-    val createdAtMillis: Long
+    val createdAtMillis: Long,
+    val remoteCardId: String? = null
 )
 
 @Entity(tableName = "local_card_materials", indices = [Index("cardId")])
@@ -22,7 +23,8 @@ data class LocalCardMaterialEntity(
     val filePath: String,
     val mimeType: String,
     val sizeBytes: Long,
-    val addedAtMillis: Long
+    val addedAtMillis: Long,
+    val remoteResourceId: String? = null
 )
 
 @Entity(tableName = "local_card_notes", indices = [Index("cardId")])
@@ -31,5 +33,8 @@ data class LocalCardNoteEntity(
     val cardId: String,
     val title: String,
     val content: String,
-    val updatedAtMillis: Long
+    val updatedAtMillis: Long,
+    val remoteNoteId: String? = null,
+    val lastSyncedAtMillis: Long? = null,
+    @androidx.room.ColumnInfo(defaultValue = "0") val isDeleted: Boolean = false
 )

@@ -6,6 +6,7 @@ import com.aipdfreader.app.data.local.dao.LocalCardDao
 import com.aipdfreader.app.data.local.entity.LocalCardEntity
 import com.aipdfreader.app.data.local.entity.LocalCardMaterialEntity
 import com.aipdfreader.app.data.local.entity.LocalCardNoteEntity
+import com.aipdfreader.app.data.sync.LocalCardSyncScheduler
 import com.aipdfreader.app.util.FileUtils
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +23,8 @@ import javax.inject.Singleton
 class LocalCardRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dao: LocalCardDao,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val syncScheduler: LocalCardSyncScheduler
 ) {
     fun observeCards(): Flow<List<LocalCardEntity>> =
         authRepository.currentUserId?.let(dao::observeCards) ?: emptyFlow()
@@ -37,8 +39,23 @@ class LocalCardRepository @Inject constructor(
             createdAtMillis = System.currentTimeMillis()
         )
         dao.insertCard(card)
+        syncScheduler.enqueue()
         return card
     }
+
+    suspend fun cardsForSync(ownerUid: String) = dao.getCardsForSync(ownerUid)
+    suspend fun markCardSynced(cardId: String, ownerUid: String, remoteCardId: String) =
+        dao.setRemoteCardId(cardId, ownerUid, remoteCardId)
+    suspend fun materialsForSync(cardId: String) = dao.getMaterialsForSync(cardId)
+    suspend fun markMaterialSynced(cardId: String, id: Long, remoteResourceId: String) =
+        dao.setRemoteResourceId(cardId, id, remoteResourceId)
+    suspend fun notesForSync(cardId: String) = dao.getNotesForSync(cardId)
+    suspend fun deletedNotesForSync(cardId: String) = dao.getDeletedNotesForSync(cardId)
+    suspend fun markNoteSynced(cardId: String, id: String, remoteNoteId: String, syncedAtMillis: Long) =
+        dao.markNoteSynced(cardId, id, remoteNoteId, syncedAtMillis)
+    suspend fun removeSyncedDeletedNote(cardId: String, id: String) = dao.removeSyncedDeletedNote(cardId, id)
+
+    suspend fun getCard(cardId: String) = dao.getCard(cardId)
 
     fun observeMaterials(cardId: String): Flow<List<LocalCardMaterialEntity>> = dao.observeMaterials(cardId)
     fun observeNotes(cardId: String): Flow<List<LocalCardNoteEntity>> = dao.observeNotes(cardId)
@@ -74,16 +91,83 @@ class LocalCardRepository @Inject constructor(
                 sizeBytes = sizeBytes,
                 addedAtMillis = System.currentTimeMillis()
             ))
-        }.onFailure { FileUtils.deleteFile(filePath) }.isSuccess
+        }.onFailure { FileUtils.deleteFile(filePath) }.onSuccess { syncScheduler.enqueue() }.isSuccess
 
     suspend fun getMaterial(cardId: String, materialId: Long) = dao.getMaterial(cardId, materialId)
 
-    suspend fun saveNote(cardId: String, id: String?, title: String, content: String) {
-        dao.saveNote(LocalCardNoteEntity(
-            id = id ?: UUID.randomUUID().toString(), cardId = cardId,
-            title = title, content = content, updatedAtMillis = System.currentTimeMillis()
-        ))
+    suspend fun hasRemoteMaterial(cardId: String, remoteResourceId: String) =
+        dao.getMaterialByRemoteId(cardId, remoteResourceId) != null
+
+    suspend fun cacheDownloadedMaterial(
+        cardId: String,
+        remoteResourceId: String,
+        displayName: String,
+        mimeType: String,
+        sizeBytes: Long,
+        sourcePath: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (dao.getMaterialByRemoteId(cardId, remoteResourceId) != null) return@withContext true
+        val source = File(sourcePath)
+        if (!source.isFile) return@withContext false
+        val directory = File(context.filesDir, "materials").apply { mkdirs() }
+        val safeName = displayName.replace(Regex("[^A-Za-z0-9._ -]"), "_").ifBlank { "resource" }
+        val target = File(directory, "${UUID.randomUUID()}_$safeName")
+        runCatching {
+            source.copyTo(target, overwrite = false)
+            dao.insertMaterial(
+                LocalCardMaterialEntity(
+                    cardId = cardId,
+                    displayName = displayName,
+                    filePath = target.absolutePath,
+                    mimeType = mimeType,
+                    sizeBytes = sizeBytes.takeIf { it > 0 } ?: target.length(),
+                    addedAtMillis = System.currentTimeMillis(),
+                    remoteResourceId = remoteResourceId
+                )
+            )
+        }.onFailure { FileUtils.deleteFile(target.absolutePath) }.isSuccess
     }
 
-    suspend fun deleteNote(cardId: String, id: String) = dao.deleteNote(cardId, id)
+    suspend fun cacheRemoteNote(cardId: String, remoteNoteId: String, title: String, content: String) {
+        val now = System.currentTimeMillis()
+        val current = dao.getNoteByRemoteId(cardId, remoteNoteId)
+        if (current == null) {
+            dao.saveNote(
+                LocalCardNoteEntity(
+                    id = UUID.randomUUID().toString(),
+                    cardId = cardId,
+                    title = title,
+                    content = content,
+                    updatedAtMillis = now,
+                    remoteNoteId = remoteNoteId,
+                    lastSyncedAtMillis = now
+                )
+            )
+        } else {
+            dao.updateCleanNoteFromRemote(cardId, current.id, title, content, now, now)
+        }
+    }
+
+    suspend fun saveNote(cardId: String, id: String?, title: String, content: String) {
+        val noteId = id ?: UUID.randomUUID().toString()
+        val previous = id?.let { dao.getNote(cardId, it) }
+        dao.saveNote(LocalCardNoteEntity(
+            id = noteId,
+            cardId = cardId,
+            title = title,
+            content = content,
+            updatedAtMillis = System.currentTimeMillis(),
+            remoteNoteId = previous?.remoteNoteId,
+            lastSyncedAtMillis = previous?.lastSyncedAtMillis,
+            isDeleted = false
+        ))
+        syncScheduler.enqueue()
+    }
+
+    suspend fun deleteNote(cardId: String, id: String) {
+        val note = dao.getNote(cardId, id) ?: return
+        if (note.remoteNoteId == null) dao.deleteUnpublishedNote(cardId, id)
+        else dao.markRemoteNoteDeleted(cardId, id, System.currentTimeMillis())
+        syncScheduler.enqueue()
+    }
 }

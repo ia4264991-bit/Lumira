@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
@@ -67,6 +68,7 @@ import java.text.DecimalFormat
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
+    onBack: () -> Unit,
     onOpenPdf: (Long) -> Unit,
     onOpenAccount: () -> Unit,
     viewModel: LibraryViewModel = hiltViewModel()
@@ -138,6 +140,11 @@ fun LibraryScreen(
         topBar = {
             LargeTopAppBar(
                 title = { Text("On this phone") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
                 actions = {
                     IconButton(onClick = onOpenAccount) {
                         Icon(Icons.Filled.AccountCircle, contentDescription = "Account")

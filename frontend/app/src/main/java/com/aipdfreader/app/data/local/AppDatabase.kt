@@ -27,7 +27,7 @@ import com.aipdfreader.app.data.local.entity.LocalCardNoteEntity
         LocalCardMaterialEntity::class,
         LocalCardNoteEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -53,6 +53,16 @@ abstract class AppDatabase : RoomDatabase() {
                 database.execSQL("""CREATE INDEX IF NOT EXISTS `index_local_card_materials_cardId` ON `local_card_materials` (`cardId`)""")
                 database.execSQL("""CREATE TABLE IF NOT EXISTS `local_card_notes` (`id` TEXT NOT NULL, `cardId` TEXT NOT NULL, `title` TEXT NOT NULL, `content` TEXT NOT NULL, `updatedAtMillis` INTEGER NOT NULL, PRIMARY KEY(`id`))""")
                 database.execSQL("""CREATE INDEX IF NOT EXISTS `index_local_card_notes_cardId` ON `local_card_notes` (`cardId`)""")
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE `local_cards` ADD COLUMN `remoteCardId` TEXT")
+                database.execSQL("ALTER TABLE `local_card_materials` ADD COLUMN `remoteResourceId` TEXT")
+                database.execSQL("ALTER TABLE `local_card_notes` ADD COLUMN `remoteNoteId` TEXT")
+                database.execSQL("ALTER TABLE `local_card_notes` ADD COLUMN `lastSyncedAtMillis` INTEGER")
+                database.execSQL("ALTER TABLE `local_card_notes` ADD COLUMN `isDeleted` INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

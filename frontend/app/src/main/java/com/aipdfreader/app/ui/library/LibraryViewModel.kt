@@ -17,6 +17,7 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import com.aipdfreader.app.domain.model.PdfDocument
 import com.aipdfreader.app.domain.model.LocalMaterial
 import com.aipdfreader.app.util.FileUtils
+import com.aipdfreader.app.util.BackendConfiguration
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -131,15 +132,17 @@ class LibraryViewModel @Inject constructor(
                 val local = localCardRepository.observeCards().first().map { card ->
                     CardDto("local:${card.id}", card.ownerUid, card.name, card.color, false, "OWNER")
                 }
-                val remote = runCatching {
-                    supervisorScope {
-                        val personal = async { cardApi.listCards() }
-                        val shared = async { cardApi.listCards("shared") }
-                        (personal.await() + shared.await())
-                            .distinctBy { it.id }
-                            .filter { !it.isShared || it.role.equals("OWNER", true) || it.role.equals("ADMIN", true) }
-                    }
-                }.getOrDefault(emptyList())
+                val remote = if (BackendConfiguration.isConfigured && hasValidatedInternet()) {
+                    runCatching {
+                        supervisorScope {
+                            val personal = async { cardApi.listCards() }
+                            val shared = async { cardApi.listCards("shared") }
+                            (personal.await() + shared.await())
+                                .distinctBy { it.id }
+                                .filter { !it.isShared || it.role.equals("OWNER", true) || it.role.equals("ADMIN", true) }
+                        }
+                    }.getOrDefault(emptyList())
+                } else emptyList()
                 _cardTargets.value = local + remote
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -149,6 +152,14 @@ class LibraryViewModel @Inject constructor(
                 _isLoadingCardTargets.value = false
             }
         }
+    }
+
+    private fun hasValidatedInternet(): Boolean {
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return false
+        val network = manager.activeNetwork ?: return false
+        val capabilities = manager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     fun addToCard(item: LibraryItem, cardId: String) {

@@ -31,8 +31,8 @@ record — see §6 below.)*
 - **Android Studio** Ladybug (2024.2) or newer
 - **JDK 17**
 - **Android SDK 35** (compile/target), **minSdk 26**
-- Access to a running instance of **our backend** (this repo does not
-  include it — see `BACKEND_BASE_URL` below)
+- A running backend is needed for Course Spaces and AI features. Personal
+  Cards, local files, reading, and Notes work offline.
 
 ## 2. Opening the project
 
@@ -77,7 +77,7 @@ The app opens to Firebase sign-in or the backend-backed Cards / Course Spaces ho
 
 New accounts continue through a short animated learner setup (name, learning goal, interests, experience, and daily study target) with an optional profile photo. Those profile details are stored locally per Firebase UID for now; they do not create or provision a backend Vision account.
 
-When the phone has no validated internet connection, creating a personal Card creates a device-local Card. Files can be picked or copied into it, opened offline, and Notes can be written offline. These local Cards are private to this phone and are not synced or shared. Creating or joining Course Spaces, Sarah, and server-backed Card actions still require the backend. Existing online Cards retain the **Make shared** action to become Course Spaces.
+Personal Cards are saved locally first, so creating a Card, adding files, reading them, and writing Notes work without internet. When a real API endpoint is configured and reachable, Android's persistent network job syncs local Cards, materials, and Notes with the same signed-in user's private Vision Card and mirrors server Resources/Notes back to the phone. Offline edits remain on-device until sync succeeds. Course Spaces and Sarah's generation still require the backend. The checked-in release URL is an example placeholder because the production API is not deployed yet; Firebase UID provisioning is also still required before protected API calls can succeed. Existing online Cards retain the **Make shared** action to become Course Spaces.
 
 Cards and Course Spaces can be searched from the home screen. Local file shelves and offline Cards show page previews for PDFs and image files, and document-type previews for other formats. The three-dot menu includes Account, Share Vision, Send feedback, and Refresh. Feedback currently opens Android's share sheet; it is not submitted to a Vision service.
 
@@ -105,8 +105,9 @@ Add the Firebase Console-generated google-services.json to frontend/app/ and ena
   remain unavailable until that mapping is made.
 - **Profile/feedback backend**: learner profile details and photos are
   device-local for now. Feedback uses the Android share sheet. A trusted
-  profile/provisioning API, feedback submission endpoint, and local Card
-  sync/promotion flow are later backend/API work.
+  profile/provisioning API and feedback submission endpoint are later
+  backend/API work. Local Card sync depends on deployment of the API endpoint
+  and Firebase UID provisioning.
 - **Android Studio validation**: the client has not yet been built or
   exercised on an emulator. Add google-services.json, sync/build, and debug
   before treating the Android implementation as complete.

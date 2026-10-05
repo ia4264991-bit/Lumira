@@ -45,7 +45,11 @@ fun CardWorkspaceScreen(
     viewModel: CardWorkspaceViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
-    val sections = if (state.isLocalCard) localSections else sharedSections
+    val sections = when {
+        !state.isLocalCard -> sharedSections
+        state.canUseServerFeatures -> sharedSections.take(6)
+        else -> localSections
+    }
     val context = LocalContext.current
     var section by remember { mutableIntStateOf(0) }
     var dialog by remember { mutableStateOf<String?>(null) }
@@ -62,6 +66,7 @@ fun CardWorkspaceScreen(
         uri?.let { viewModel.uploadResource(cardId, it) }
     }
     LaunchedEffect(cardId, sharedNow) { viewModel.load(cardId, sharedNow) }
+    LaunchedEffect(sections.size) { if (section >= sections.size) section = 0 }
 
     if (showSharing) {
         AlertDialog(onDismissRequest = { showSharing = false }, title = { Text("Course Space sharing") },
@@ -154,7 +159,10 @@ fun CardWorkspaceScreen(
                         )
                     },
                     onGenerate = { type -> viewModel.generate(cardId, type, state.resources.map { it.id }) },
-                    allowGeneration = !state.isLocalCard)
+                    allowGeneration = !state.isLocalCard || (state.canUseServerFeatures &&
+                        state.remoteCardId != null && state.resources.isNotEmpty() &&
+                            state.resources.all { it.id in state.remoteResourceIdsByLocalId }
+                        ))
                 1 -> ArtifactList("Notes", state.notes.map { it.title to it.content }, "Create note", { dialog = "note" }) {
                     state.notes.forEach { note ->
                         Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {

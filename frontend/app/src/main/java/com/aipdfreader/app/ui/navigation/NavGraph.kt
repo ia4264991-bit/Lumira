@@ -88,6 +88,7 @@ fun AppNavGraph(
 
         composable(Routes.LIBRARY) {
             LibraryScreen(
+                onBack = { navController.popBackStack() },
                 onOpenPdf = { pdfId -> navController.navigate(Routes.reader(pdfId)) },
                 onOpenAccount = { navController.navigate(Routes.ACCOUNT) }
             )
