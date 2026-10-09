@@ -32,7 +32,7 @@ object Routes {
     const val ACCOUNT = "account"
     const val PROFILE_SETUP = "profile-setup"
     const val NOTIFICATIONS = "notifications"
-    const val CARD = "card/{cardId}/{cardName}?isShared={isShared}&role={role}"
+    const val CARD = "card/{cardId}/{cardName}?isShared={isShared}&role={role}&memberCardId={memberCardId}"
 
     fun reader(pdfId: Long, resourceId: String? = null, cardId: String? = null) =
         if (resourceId == null || cardId == null) "reader/$pdfId"
@@ -40,8 +40,8 @@ object Routes {
     fun resourceSarah(pdfId: Long, resourceId: String, cardId: String,
                       highlightId: Long? = null, pageIndex: Int? = null) =
         "sarah-resource/$pdfId/$resourceId/$cardId?highlightId=${highlightId ?: -1L}&pageIndex=${pageIndex ?: -1}"
-    fun card(cardId: String, cardName: String, isShared: Boolean, role: String?) =
-        "card/$cardId/${android.net.Uri.encode(cardName)}?isShared=$isShared&role=${role ?: "MEMBER"}"
+    fun card(cardId: String, cardName: String, isShared: Boolean, role: String?, memberCardId: String? = null) =
+        "card/$cardId/${android.net.Uri.encode(cardName)}?isShared=$isShared&role=${role ?: "MEMBER"}&memberCardId=${memberCardId ?: cardId}"
 }
 
 /**
@@ -99,7 +99,7 @@ fun AppNavGraph(
                 onOpenLibrary = { navController.navigate(Routes.LIBRARY) },
                 onOpenAccount = { navController.navigate(Routes.ACCOUNT) },
                 onOpenNotifications = { navController.navigate(Routes.NOTIFICATIONS) },
-                onOpenCard = { card -> navController.navigate(Routes.card(card.id, card.name, card.isShared, card.role ?: "OWNER")) }
+                onOpenCard = { card -> navController.navigate(Routes.card(card.id, card.name, card.isShared, card.role ?: "OWNER", card.memberCardId)) }
             )
         }
 
@@ -108,13 +108,15 @@ fun AppNavGraph(
             arguments = listOf(navArgument("cardId") { type = NavType.StringType },
                 navArgument("cardName") { type = NavType.StringType },
                 navArgument("isShared") { type = NavType.BoolType; defaultValue = false },
-                navArgument("role") { type = NavType.StringType; defaultValue = "MEMBER" })
+                navArgument("role") { type = NavType.StringType; defaultValue = "MEMBER" },
+                navArgument("memberCardId") { type = NavType.StringType; defaultValue = "" })
         ) { entry ->
             CardWorkspaceScreen(
                 cardId = entry.arguments?.getString("cardId").orEmpty(),
                 cardName = entry.arguments?.getString("cardName").orEmpty(),
                 isShared = entry.arguments?.getBoolean("isShared") ?: false,
                 callerRole = entry.arguments?.getString("role") ?: "MEMBER",
+                memberCardId = entry.arguments?.getString("memberCardId")?.takeIf(String::isNotBlank),
                 onBack = { navController.popBackStack() },
                 onOpenPdf = { pdfId, resourceId ->
                     val workspaceCardId = entry.arguments?.getString("cardId").orEmpty()

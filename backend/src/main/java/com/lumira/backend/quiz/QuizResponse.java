@@ -5,4 +5,5 @@ import java.util.List;
 import java.util.UUID;
 
 public record QuizResponse(UUID id, UUID ownerCardId, UUID ownerUserId, String title,
-        String description, List<QuizQuestionResponse> questions, Instant createdAt, Instant updatedAt) { }
+        String description, List<QuizQuestionResponse> questions, Instant createdAt, Instant updatedAt,
+        boolean sharedWithThisCourseSpace) { }

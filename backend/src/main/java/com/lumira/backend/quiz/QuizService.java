@@ -8,7 +8,6 @@ import com.lumira.backend.resource.ArtifactType;
 import com.lumira.backend.resource.ResourceAuthorizationService;
 import com.lumira.backend.resource.ResourceShare;
 import com.lumira.backend.resource.ResourceShareRepository;
-import com.lumira.backend.resource.ResourceSharingService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +15,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,14 +33,13 @@ public class QuizService {
     private final QuizAttemptAnswerOptionRepository answerOptions;
     private final ResourceShareRepository shares;
     private final ResourceAuthorizationService authorization;
-    private final ResourceSharingService sharing;
     private final QuizResponseMapper mapper;
 
     public QuizService(QuizRepository quizzes, QuizQuestionRepository questions,
             QuizQuestionOptionRepository options, QuizAttemptRepository attempts,
             QuizAttemptAnswerRepository answers, QuizAttemptAnswerOptionRepository answerOptions,
             ResourceShareRepository shares, ResourceAuthorizationService authorization,
-            ResourceSharingService sharing, QuizResponseMapper mapper) {
+            QuizResponseMapper mapper) {
         this.quizzes = quizzes;
         this.questions = questions;
         this.options = options;
@@ -49,13 +48,12 @@ public class QuizService {
         this.answerOptions = answerOptions;
         this.shares = shares;
         this.authorization = authorization;
-        this.sharing = sharing;
         this.mapper = mapper;
     }
 
     @Transactional
     public QuizResponse create(UUID cardId, UUID actorId, QuizCreateRequest request) {
-        Card card = authorization.requireCardUploadForUpdate(cardId, actorId);
+        authorization.requirePrivateArtifactCardForCreate(cardId, actorId);
         validateText(request.title(), "title", true);
         validateText(request.description(), "description", false);
         validateQuestions(request.questions());
@@ -64,7 +62,6 @@ public class QuizService {
         }
         Quiz quiz = quizzes.saveAndFlush(new Quiz(ArtifactOwner.forCard(cardId), request.title(), request.description()));
         persistQuestions(quiz.getId(), request.questions());
-        sharing.createCardShareIfShared(ArtifactType.QUIZ, quiz.getId(), cardId, actorId);
         return mapper.from(quiz, authorization.isOwner(quiz.getOwner(), actorId));
     }
 
@@ -77,15 +74,21 @@ public class QuizService {
         } else {
             List<UUID> ids = shares.findByCardIdAndActiveTrueOrderByCreatedAtAsc(cardId).stream()
                     .filter(s -> s.getQuizId() != null).map(ResourceShare::getQuizId).toList();
-            values = quizzes.findAllById(ids).stream()
-                    .sorted(java.util.Comparator.comparing(Quiz::getCreatedAt).reversed()).toList();
+            var visible = new LinkedHashMap<UUID, Quiz>();
+            if (card.isOwnedBy(actorId)) {
+                quizzes.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId).forEach(quiz -> visible.put(quiz.getId(), quiz));
+            }
+            quizzes.findAllById(ids).forEach(quiz -> visible.put(quiz.getId(), quiz));
+            values = visible.values().stream().sorted(java.util.Comparator.comparing(Quiz::getCreatedAt).reversed()).toList();
         }
         Set<UUID> ownedCardIds = authorization.ownedCardIds(actorId, values.stream()
                 .map(Quiz::getOwner).filter(owner -> !owner.isUserOwned())
                 .map(ArtifactOwner::getOwningCardId).toList());
         return mapper.fromMany(values, q -> q.getOwner().isUserOwned()
                 ? q.getOwner().getOwningUserId().equals(actorId)
-                : ownedCardIds.contains(q.getOwner().getOwningCardId()));
+                : ownedCardIds.contains(q.getOwner().getOwningCardId()), Set.copyOf(
+                card.isShared() ? shares.findByCardIdAndActiveTrueOrderByCreatedAtAsc(cardId).stream()
+                        .filter(s -> s.getQuizId() != null).map(ResourceShare::getQuizId).toList() : List.of()));
     }
 
     @Transactional(readOnly = true)

@@ -36,6 +36,10 @@ data class ReaderUiState(
     val document: PdfDocument? = null,
     val currentPage: Int = 0,
     val pageBitmap: Bitmap? = null,
+    val pageBitmaps: Map<Int, Bitmap> = emptyMap(),
+    val pageAspectRatios: Map<Int, Float> = emptyMap(),
+    val renderingPageIndexes: Set<Int> = emptySet(),
+    val pageErrors: Map<Int, String> = emptyMap(),
     val pageText: String = "",
     val pageHighlights: List<Highlight> = emptyList(),
     val isLoadingPage: Boolean = true,
@@ -84,21 +88,31 @@ class ReaderViewModel @Inject constructor(
     val uiState: StateFlow<ReaderUiState> = _uiState.asStateFlow()
 
     private var renderer: PdfPageRenderer? = null
+    private val pageBitmapCache = LinkedHashMap<Int, Bitmap>(8, .75f, true)
+    private val pageRenderJobs = mutableMapOf<Int, Job>()
     private var highlightsJob: Job? = null
     private var selectionResolutionJob: Job? = null
     private var prefetchJob: Job? = null
+    private var pageTextJob: Job? = null
 
     init {
         viewModelScope.launch {
             pdfRepository.markOpened(pdfId)
             val document = pdfRepository.getDocument(pdfId)
             if (document == null) {
-                _uiState.update { it.copy(errorMessage = "This document could not be found.") }
+                _uiState.update {
+                    it.copy(isLoadingPage = false, errorMessage = "This document could not be found.")
+                }
                 return@launch
             }
             _uiState.update { it.copy(document = document, currentPage = document.lastReadPage) }
-            renderer = PdfPageRenderer(document.filePath)
-            loadPage(document.lastReadPage)
+            runCatching { PdfPageRenderer(document.filePath) }
+                .onSuccess { renderer = it; loadPage(document.lastReadPage) }
+                .onFailure {
+                    _uiState.update {
+                        it.copy(isLoadingPage = false, errorMessage = "This PDF file is no longer available or can’t be read.")
+                    }
+                }
         }
     }
 
@@ -106,7 +120,14 @@ class ReaderViewModel @Inject constructor(
         val document = _uiState.value.document ?: return
         val clamped = index.coerceIn(0, document.pageCount - 1)
         if (clamped == _uiState.value.currentPage) return
-        _uiState.update { it.copy(currentPage = clamped) }
+        _uiState.update {
+            it.copy(
+                currentPage = clamped,
+                pageBitmap = pageBitmapCache[clamped],
+                pageText = "",
+                isLoadingPage = pageBitmapCache[clamped] == null
+            )
+        }
         loadPage(clamped)
         viewModelScope.launch { pdfRepository.saveLastReadPage(pdfId, clamped) }
     }
@@ -325,7 +346,7 @@ class ReaderViewModel @Inject constructor(
     }
 
     private fun loadPage(pageIndex: Int) {
-        val currentRenderer = renderer ?: return
+        if (renderer == null) return
 
         // Cancel any resolution still running for the page being left, and
         // clear every piece of selection state immediately — not just once
@@ -336,9 +357,12 @@ class ReaderViewModel @Inject constructor(
         // identified during the M1.3 integration review.
         selectionResolutionJob?.cancel()
         prefetchJob?.cancel()
+        pageTextJob?.cancel()
+        val cachedBitmap = pageBitmapCache[pageIndex]
         _uiState.update {
             it.copy(
-                isLoadingPage = true,
+                pageBitmap = cachedBitmap,
+                isLoadingPage = cachedBitmap == null,
                 lassoPolygon = null,
                 lassoSelectionResult = null,
                 currentSelection = "",
@@ -354,15 +378,13 @@ class ReaderViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
+        ensurePageRendered(pageIndex)
+        pageTextJob = viewModelScope.launch {
             try {
-                val bitmap = currentRenderer.renderPage(pageIndex, targetWidthPx = 1600)
                 val text = pdfRepository.extractPageText(_uiState.value.document!!.filePath, pageIndex)
                 _uiState.update {
-                    it.copy(
-                        pageBitmap = bitmap,
+                    if (it.currentPage == pageIndex) it.copy(
                         pageText = text,
-                        isLoadingPage = false,
                         // Defensive, same reasoning as the immediate reset
                         // above: guards against a lasso stroke captured on
                         // the still-visible previous bitmap resolving after
@@ -375,13 +397,13 @@ class ReaderViewModel @Inject constructor(
                         currentSelection = "",
                         isRefiningLasso = false,
                         isResolvingLasso = false
-                    )
+                    ) else it
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isLoadingPage = false, errorMessage = "Couldn't render this page.")
+                    if (it.currentPage == pageIndex) it.copy(errorMessage = "Couldn't read text from this page.") else it
                 }
             }
         }
@@ -413,12 +435,90 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
+    /** Render only pages that the lazy reader has composed near the viewport. */
+    fun ensurePageRendered(pageIndex: Int) {
+        val document = _uiState.value.document ?: return
+        if (pageIndex !in 0 until document.pageCount) return
+        val currentRenderer = renderer ?: return
+        pageBitmapCache[pageIndex]?.let { bitmap ->
+            _uiState.update { state ->
+                state.copy(
+                    pageBitmaps = state.pageBitmaps + (pageIndex to bitmap),
+                    pageAspectRatios = state.pageAspectRatios + (pageIndex to (bitmap.width.toFloat() / bitmap.height)),
+                    pageBitmap = if (state.currentPage == pageIndex) bitmap else state.pageBitmap,
+                    isLoadingPage = if (state.currentPage == pageIndex) false else state.isLoadingPage,
+                    renderingPageIndexes = state.renderingPageIndexes - pageIndex,
+                    pageErrors = state.pageErrors - pageIndex
+                )
+            }
+            return
+        }
+        if (pageRenderJobs[pageIndex]?.isActive == true) return
+
+        _uiState.update { state ->
+            state.copy(
+                renderingPageIndexes = state.renderingPageIndexes + pageIndex,
+                pageErrors = state.pageErrors - pageIndex
+            )
+        }
+        val renderJob = viewModelScope.launch {
+            try {
+                val aspectRatio = currentRenderer.getPageAspectRatio(pageIndex)
+                val bitmap = currentRenderer.renderPage(pageIndex, targetWidthPx = 1200)
+                val evictedIndexes = mutableListOf<Int>()
+                pageBitmapCache[pageIndex] = bitmap
+                while (pageBitmapCache.size > MAX_CACHED_PAGE_BITMAPS) {
+                    val oldest = pageBitmapCache.keys.firstOrNull() ?: break
+                    if (oldest == pageIndex && pageBitmapCache.size == 1) break
+                    pageBitmapCache.remove(oldest)
+                    evictedIndexes += oldest
+                }
+                _uiState.update { state ->
+                    val visibleBitmaps = (state.pageBitmaps - evictedIndexes.toSet()) + (pageIndex to bitmap)
+                    state.copy(
+                        pageBitmaps = visibleBitmaps,
+                        pageAspectRatios = state.pageAspectRatios + (pageIndex to aspectRatio),
+                        pageBitmap = if (state.currentPage == pageIndex) bitmap else state.pageBitmap,
+                        isLoadingPage = if (state.currentPage == pageIndex) false else state.isLoadingPage,
+                        renderingPageIndexes = state.renderingPageIndexes - pageIndex,
+                        pageErrors = state.pageErrors - pageIndex,
+                        errorMessage = if (state.currentPage == pageIndex) null else state.errorMessage
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { state ->
+                    val message = "Couldn’t render page ${pageIndex + 1}. Tap to retry."
+                    state.copy(
+                        renderingPageIndexes = state.renderingPageIndexes - pageIndex,
+                        pageErrors = state.pageErrors + (pageIndex to message),
+                        isLoadingPage = if (state.currentPage == pageIndex) false else state.isLoadingPage,
+                        errorMessage = if (state.currentPage == pageIndex) "Couldn't render this page." else state.errorMessage
+                    )
+                }
+            } finally {
+                pageRenderJobs.remove(pageIndex)
+            }
+        }
+        pageRenderJobs[pageIndex] = renderJob
+    }
+
     fun dismissError() {
         _uiState.update { it.copy(errorMessage = null) }
     }
 
     override fun onCleared() {
         super.onCleared()
+        pageRenderJobs.values.forEach(Job::cancel)
+        pageRenderJobs.clear()
+        pageTextJob?.cancel()
+        pageBitmapCache.values.forEach { if (!it.isRecycled) it.recycle() }
+        pageBitmapCache.clear()
         renderer?.close()
+    }
+
+    private companion object {
+        const val MAX_CACHED_PAGE_BITMAPS = 4
     }
 }

@@ -2,9 +2,9 @@ package com.aipdfreader.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val BluePrimary = Color(0xFF2962FF)
-val BluePrimaryDark = Color(0xFF0039CB)
-val BlueContainer = Color(0xFFD8E2FF)
+val IndigoPrimary = Color(0xFF5B57D9)
+val IndigoPrimaryDark = Color(0xFF4541B4)
+val IndigoContainer = Color(0xFFE7E5FF)
 val AmberHighlight = Color(0xFFFFD54F)
 val GreenHighlight = Color(0xFFA5D6A7)
 val PinkHighlight = Color(0xFFF48FB1)

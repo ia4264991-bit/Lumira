@@ -9,6 +9,7 @@ import com.aipdfreader.app.data.repository.PdfRepository
 import com.aipdfreader.app.data.repository.LocalMaterialRepository
 import com.aipdfreader.app.data.repository.LocalCardRepository
 import com.aipdfreader.app.data.remote.CardApi
+import com.aipdfreader.app.data.remote.listAllCards
 import com.aipdfreader.app.data.remote.DomainApi
 import com.aipdfreader.app.data.remote.dto.CardDto
 import okhttp3.MediaType.Companion.toMediaType
@@ -135,8 +136,8 @@ class LibraryViewModel @Inject constructor(
                 val remote = if (BackendConfiguration.isConfigured && hasValidatedInternet()) {
                     runCatching {
                         supervisorScope {
-                            val personal = async { cardApi.listCards() }
-                            val shared = async { cardApi.listCards("shared") }
+                            val personal = async { cardApi.listAllCards() }
+                            val shared = async { cardApi.listAllCards("shared") }
                             (personal.await() + shared.await())
                                 .distinctBy { it.id }
                                 .filter { !it.isShared || it.role.equals("OWNER", true) || it.role.equals("ADMIN", true) }

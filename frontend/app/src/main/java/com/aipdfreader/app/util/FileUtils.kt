@@ -32,14 +32,30 @@ object FileUtils {
 
     fun mimeTypeForFileName(displayName: String): String? = when (displayName.substringAfterLast('.', "").lowercase()) {
             "pdf" -> "application/pdf"
+            "doc" -> "application/msword"
             "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            "ppt" -> "application/vnd.ms-powerpoint"
             "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            "xls" -> "application/vnd.ms-excel"
             "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             "csv" -> "text/csv"
             "txt" -> "text/plain"
             "png" -> "image/png"
             "jpg", "jpeg" -> "image/jpeg"
             "webp" -> "image/webp"
+            "gif" -> "image/gif"
+            "bmp" -> "image/bmp"
+            "mp3" -> "audio/mpeg"
+            "wav" -> "audio/wav"
+            "m4a" -> "audio/mp4"
+            "aac" -> "audio/aac"
+            "ogg" -> "audio/ogg"
+            "flac" -> "audio/flac"
+            "mp4" -> "video/mp4"
+            "mov" -> "video/quicktime"
+            "3gp" -> "video/3gpp"
+            "mkv" -> "video/x-matroska"
+            "webm" -> "video/webm"
             else -> null
         }
 

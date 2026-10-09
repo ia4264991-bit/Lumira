@@ -766,6 +766,39 @@ closes the persistence-mechanism gap it explicitly left open.
 
 - **Revision note (2026-10-05)** — AD-083 records the explicitly requested Android offline, automatic sync, and profile experience without changing the backend domain model or API contract. It supersedes the earlier statement that local Cards were never uploaded and the prior deferral of client offline Cards/Notes. Remote Resource/Note mirroring is now part of the Android client; broader deletion/conflict behavior remains deferred.
 
+- **AD-084 (additive Android client decision, 2026-10-08 — cached Course Space reading and member-Card context)** — AD-019 remains unchanged: a Course Space is a shared Card, and `card_membership.memberCardId` remains the existing relationship to a member's personal Card. The caller's `GET /v1/cards?scope=shared` representation includes a caller-specific `memberCardId` derived from that caller's current ACTIVE membership; the Owner's value is the Course Space Card ID. This lets Android restore the Course Space/personal-Card pair without guessing from names or device-only join history.
+
+  Android may persist a last-successfully-authorized read snapshot per Firebase UID and Course Space Card in Room. It contains the Card and caller membership/role/memberCardId, shared Resource metadata and share state, Notes/Study Sets/Quizzes/Flashcard Sets visible to that caller, Members, Updates, and last-sync time. Sarah conversation history remains client-local and partitioned by Firebase UID; it is never uploaded as persisted conversation state, consistent with AD-080. The Room representation is an Android read cache, not an authorization source or a second domain model.
+
+  Online synchronization fetches current server state and writes a complete authorized snapshot to Room. UI observes Room first and refreshes from the API when possible. Network failure preserves the prior snapshot and marks it stale/offline. The backend remains authoritative for ownership, membership, permissions, sharing, content, and mutations. Offline cached Course Space data is readable as last-known content only. The client must not use stale membership to join, upload, share, manage members, generate links, or ask Sarah. Server-dependent operations are rejected with an offline message and are not represented as successful or queued, except for the existing AD-083 local private-Card/Note sync behavior.
+
+  Resource metadata and file bytes are separate. Synchronization caches metadata without automatically downloading every remote file. A file is marked available offline only while its bytes exist in app-private persistent storage; otherwise the UI offers an online download and explains that the file is unavailable offline. Existing local files remain readable without the network.
+
+  Membership is evaluated live by the backend for every online request. While disconnected, the app may display the user's last successfully authorized snapshot, but it grants no write or membership-management authority. At the next successful synchronization, a Course Space absent from the caller's ACTIVE shared-Card response is treated as revoked/left: delete its cached shared snapshot and cached copies of its shared files. Retain the user's member Card and private artifacts. A later rejoin repopulates the cache from the server. Room caches are partitioned by Firebase UID and must never be displayed to another signed-in UID.
+
+  Notes, Study Sets, Quizzes, and Flashcard Sets are private by default even when created while viewing a Course Space. They become visible to other members only after an explicit generic artifact share record. A member's private artifacts are owned by that member's existing `memberCardId`; the Course Space Owner's membership continues to use the Course Space Card itself. No separate Course Space entity or ownership model is introduced. Resource sharing remains reference-based under AD-021/045. Sarah remains server-backed; saved local conversation messages may be read offline, but a new question is never sent while offline.
+
+  This supersedes AD-022's conversion-time automatic sharing default for non-Resource study artifacts: enabling Course Space sharing must not create share records for existing Notes, Study Sets, Quizzes, or Flashcard Sets. Resources retain AD-022's existing default-share behavior when a Card becomes a Course Space. In either case, an artifact is exposed only through its active share record.
+
+  This decision adds no backend cache or authorization bypass and requires no new PostgreSQL entity. It does not claim production sync is operational until a real release API URL and trusted Firebase UID provisioning are available under AD-082.
+
+- **Revision note (2026-10-08)** — AD-084 extends AD-083 from device-local private Cards/Notes to authorized read snapshots for already-joined Course Spaces. AD-083's local-first private Card creation and upload/sync behavior remains in force; AD-084 adds shared read-cache, member-Card restoration, file availability, and membership-revocation reconciliation rules. It also supersedes AD-022's automatic conversion-time sharing for non-Resource study artifacts while preserving Resource default sharing.
+
+- **AD-085 (additive Card management clarification, 2026-10-08)** — The
+  authenticated owner may rename their private Card or owned Course Space;
+  membership alone never grants rename authority. A private Card owner may
+  permanently delete that Card and its unshared private contents. Any artifact
+  with an active share into a Course Space survives deletion and becomes
+  User-owned by the same owner, while its share records remain active. A Card
+  referenced by membership, join-request, or Course Space event history cannot
+  be deleted; a shared Course Space uses the existing Owner-only dissolution
+  operation, and a non-Owner member may only leave. This preserves shared data,
+  historical membership links, and append-only Course Space events without
+  creating a second Card/Course Space model. Android may delete a never-synced
+  device-local Card offline; deletion of a server-backed Card requires a live
+  server response, and queued local deletion must not cause a deleted Card to
+  reappear during synchronization.
+
 - **Revision note (2026-10-02)** — AD-066 and AD-067 add the previously
   unspecified transfer result and member-Card relationship without
   changing the historical wording of AD-042 or AD-033. AD-068 resolves
@@ -776,12 +809,11 @@ closes the persistence-mechanism gap it explicitly left open.
 
 ### Deliberately left as an extension point, not designed now
 
-- **Offline/download capability** — the original design doc's distinction
-  (available-in-Course-Space / stored-remotely / downloaded-locally) is
-  the right shape conceptually, but no entity/API design is committed
-  here. Per the project's own under-build-first discipline, this is
-  correctly deferred until real usage shows it's needed — noted so it
-  isn't silently dropped, not because it's ready to build.
+- Offline reading of authorized Card/Course Space snapshots and explicit
+  resource-file availability are defined by AD-083/084. Other offline
+  capabilities (including new offline membership/share operations,
+  generalized conflict resolution, and automatic bulk-download policies)
+  remain deferred and must not be inferred from those decisions.
 
 ---
 

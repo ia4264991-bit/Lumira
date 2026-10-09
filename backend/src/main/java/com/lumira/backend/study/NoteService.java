@@ -8,11 +8,11 @@ import com.lumira.backend.resource.ArtifactType;
 import com.lumira.backend.resource.ResourceAuthorizationService;
 import com.lumira.backend.resource.ResourceShare;
 import com.lumira.backend.resource.ResourceShareRepository;
-import com.lumira.backend.resource.ResourceSharingService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,21 +21,17 @@ public class NoteService {
     private final NoteRepository notes;
     private final ResourceShareRepository shares;
     private final ResourceAuthorizationService authorization;
-    private final ResourceSharingService sharing;
-
     public NoteService(NoteRepository notes, ResourceShareRepository shares,
-            ResourceAuthorizationService authorization, ResourceSharingService sharing) {
+            ResourceAuthorizationService authorization) {
         this.notes = notes;
         this.shares = shares;
         this.authorization = authorization;
-        this.sharing = sharing;
     }
 
     @Transactional
     public NoteResponse create(UUID cardId, UUID actorId, NoteCreateRequest request) {
-        authorization.requireCardUploadForUpdate(cardId, actorId);
+        authorization.requirePrivateArtifactCardForCreate(cardId, actorId);
         Note note = notes.saveAndFlush(new Note(ArtifactOwner.forCard(cardId), request.title(), request.content()));
-        sharing.createCardShareIfShared(ArtifactType.NOTE, note.getId(), cardId, actorId);
         return NoteResponse.from(note);
     }
 
@@ -45,8 +41,13 @@ public class NoteService {
         if (!card.isShared()) return notes.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId).stream().map(NoteResponse::from).toList();
         List<UUID> sharedIds = shares.findByCardIdAndActiveTrueOrderByCreatedAtAsc(cardId).stream()
                 .filter(s -> s.getNoteId() != null).map(ResourceShare::getNoteId).toList();
-        return notes.findAllById(sharedIds).stream().sorted(Comparator.comparing(Note::getCreatedAt).reversed())
-                .map(NoteResponse::from).toList();
+        var visible = new LinkedHashMap<UUID, Note>();
+        if (card.isOwnedBy(actorId)) {
+            notes.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId).forEach(note -> visible.put(note.getId(), note));
+        }
+        notes.findAllById(sharedIds).forEach(note -> visible.put(note.getId(), note));
+        return visible.values().stream().sorted(Comparator.comparing(Note::getCreatedAt).reversed())
+                .map(note -> NoteResponse.from(note, sharedIds.contains(note.getId()))).toList();
     }
 
     @Transactional(readOnly = true)

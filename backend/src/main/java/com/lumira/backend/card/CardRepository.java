@@ -53,7 +53,7 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
     List<Card> findByIdInAndIsSharedTrue(List<UUID> ids);
     List<Card> findByIdInAndOwnerId(List<UUID> ids, UUID ownerId);
 
-    @Query(value = "select c, m.role from Card c left join CardMembership m on m.cardId = c.id and m.userId = :userId and m.status = :active " +
+    @Query(value = "select c, m.role, m.memberCardId from Card c left join CardMembership m on m.cardId = c.id and m.userId = :userId and m.status = :active " +
             "where c.isShared = true and (c.ownerId = :userId or m.id is not null) order by c.createdAt desc, c.id asc",
             countQuery = "select count(c) from Card c left join CardMembership m on m.cardId = c.id and m.userId = :userId and m.status = :active " +
                     "where c.isShared = true and (c.ownerId = :userId or m.id is not null)")

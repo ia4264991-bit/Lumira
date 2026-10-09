@@ -26,6 +26,8 @@ class PdfPageRenderer(filePath: String) : AutoCloseable {
     )
     private val renderer = PdfRenderer(fileDescriptor)
     private val mutex = Mutex() // PdfRenderer is not thread-safe; serialize access.
+    private val lifecycleLock = Any()
+    @Volatile private var closed = false
 
     val pageCount: Int get() = renderer.pageCount
 
@@ -36,28 +38,43 @@ class PdfPageRenderer(filePath: String) : AutoCloseable {
      */
     suspend fun renderPage(pageIndex: Int, targetWidthPx: Int): Bitmap = withContext(Dispatchers.IO) {
         mutex.withLock {
-            renderer.openPage(pageIndex).use { page ->
-                val scale = targetWidthPx.toFloat() / page.width
-                val width = targetWidthPx
-                val height = (page.height * scale).toInt().coerceAtLeast(1)
-                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                bitmap.eraseColor(android.graphics.Color.WHITE)
-                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                bitmap
+            synchronized(lifecycleLock) {
+                check(!closed) { "PDF renderer is closed." }
+                renderer.openPage(pageIndex).use { page ->
+                    val scale = targetWidthPx.toFloat() / page.width
+                    val width = targetWidthPx
+                    val height = (page.height * scale).toInt().coerceAtLeast(1)
+                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    try {
+                        bitmap.eraseColor(android.graphics.Color.WHITE)
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        bitmap
+                    } catch (error: Exception) {
+                        bitmap.recycle()
+                        throw error
+                    }
+                }
             }
         }
     }
 
     suspend fun getPageAspectRatio(pageIndex: Int): Float = withContext(Dispatchers.IO) {
         mutex.withLock {
-            renderer.openPage(pageIndex).use { page ->
-                page.width.toFloat() / page.height.toFloat()
+            synchronized(lifecycleLock) {
+                check(!closed) { "PDF renderer is closed." }
+                renderer.openPage(pageIndex).use { page ->
+                    page.width.toFloat() / page.height.toFloat()
+                }
             }
         }
     }
 
     override fun close() {
-        renderer.close()
-        fileDescriptor.close()
+        synchronized(lifecycleLock) {
+            if (closed) return
+            renderer.close()
+            fileDescriptor.close()
+            closed = true
+        }
     }
 }

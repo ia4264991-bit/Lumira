@@ -2,6 +2,8 @@ package com.aipdfreader.app.data.repository
 
 import android.content.Context
 import android.net.Uri
+import androidx.room.withTransaction
+import com.aipdfreader.app.data.local.AppDatabase
 import com.aipdfreader.app.data.local.dao.LocalCardDao
 import com.aipdfreader.app.data.local.entity.LocalCardEntity
 import com.aipdfreader.app.data.local.entity.LocalCardMaterialEntity
@@ -22,12 +24,16 @@ import javax.inject.Singleton
 @Singleton
 class LocalCardRepository @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val database: AppDatabase,
     private val dao: LocalCardDao,
     private val authRepository: AuthRepository,
     private val syncScheduler: LocalCardSyncScheduler
 ) {
     fun observeCards(): Flow<List<LocalCardEntity>> =
         authRepository.currentUserId?.let(dao::observeCards) ?: emptyFlow()
+
+    fun observeAllCards(): Flow<List<LocalCardEntity>> =
+        authRepository.currentUserId?.let(dao::observeAllCards) ?: emptyFlow()
 
     suspend fun createCard(name: String, color: String): LocalCardEntity {
         val ownerUid = authRepository.currentUserId ?: error("Sign in to save a Card on this phone.")
@@ -46,6 +52,31 @@ class LocalCardRepository @Inject constructor(
     suspend fun cardsForSync(ownerUid: String) = dao.getCardsForSync(ownerUid)
     suspend fun markCardSynced(cardId: String, ownerUid: String, remoteCardId: String) =
         dao.setRemoteCardId(cardId, ownerUid, remoteCardId)
+    suspend fun recordRemoteCardIdForDeletion(cardId: String, ownerUid: String, remoteCardId: String) =
+        dao.recordRemoteCardIdForDeletion(cardId, ownerUid, remoteCardId)
+    suspend fun cardForSync(ownerUid: String, cardId: String) = dao.getCardForSync(ownerUid, cardId)
+    suspend fun renameLocalCard(ownerUid: String, cardId: String, name: String): Boolean =
+        dao.updateCardName(cardId, ownerUid, name.trim()) > 0
+    suspend fun renameLocalCardByRemoteId(ownerUid: String, remoteCardId: String, name: String): Boolean =
+        dao.updateCardNameByRemoteId(ownerUid, remoteCardId, name.trim()) > 0
+    suspend fun markCardDeleted(ownerUid: String, cardId: String): Boolean =
+        dao.markCardDeleted(cardId, ownerUid) > 0
+    suspend fun isCardDeleted(ownerUid: String, cardId: String): Boolean =
+        dao.getCardForSync(ownerUid, cardId)?.isDeleted == true
+
+    suspend fun finalizeDeletedCard(ownerUid: String, cardId: String): Boolean = withContext(Dispatchers.IO) {
+        val paths = database.withTransaction {
+            val card = dao.getCardForSync(ownerUid, cardId) ?: return@withTransaction null
+            if (!card.isDeleted) return@withTransaction null
+            val materialPaths = dao.getMaterialPaths(cardId)
+            dao.deleteNotesForCard(cardId)
+            dao.deleteMaterialsForCard(cardId)
+            dao.deleteTombstonedCard(cardId, ownerUid)
+            materialPaths
+        } ?: return@withContext false
+        paths.forEach(FileUtils::deleteFile)
+        true
+    }
     suspend fun materialsForSync(cardId: String) = dao.getMaterialsForSync(cardId)
     suspend fun markMaterialSynced(cardId: String, id: Long, remoteResourceId: String) =
         dao.setRemoteResourceId(cardId, id, remoteResourceId)

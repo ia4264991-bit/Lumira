@@ -103,7 +103,9 @@ Course Spaces/sharing → Sarah → Activity/notifications → Admin operations
 
 **Explicitly deferred, per existing repository decisions — not part of
 MVP, do not silently pull forward:**
-- Offline/download capability (`DECISIONS.md`'s standing extension point)
+- Generalized offline writes/conflict resolution and automatic bulk
+  downloads; the authorized offline read-cache behavior is now defined by
+  AD-084 and is a separately approved Android integration scope.
 - Video Overview (`LUMIRA_STATE.md`'s planned-features list — cost/
   bandwidth deferred)
 - "Buy Course" / "Community" beyond a Coming-Soon placeholder

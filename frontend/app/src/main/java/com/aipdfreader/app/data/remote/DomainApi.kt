@@ -9,6 +9,17 @@ import retrofit2.http.*
 
 /** Thin-client endpoints from API_CONTRACT.md. Authorization stays on the server. */
 interface DomainApi {
+    @POST("v1/artifacts/{artifactType}/{artifactId}/share") suspend fun shareArtifact(
+        @Path("artifactType") artifactType: String,
+        @Path("artifactId") artifactId: String,
+        @Body body: ArtifactShareDto
+    ): Response<ResponseBody>
+    @DELETE("v1/artifacts/{artifactType}/{artifactId}/share/{cardId}") suspend fun unshareArtifact(
+        @Path("artifactType") artifactType: String,
+        @Path("artifactId") artifactId: String,
+        @Path("cardId") cardId: String
+    ): Response<ResponseBody>
+
     @GET("v1/cards/{cardId}/resources") suspend fun resources(@Path("cardId") cardId: String): List<ResourceDto>
     @Multipart @POST("v1/cards/{cardId}/resources") suspend fun uploadResource(
         @Path("cardId") cardId: String,

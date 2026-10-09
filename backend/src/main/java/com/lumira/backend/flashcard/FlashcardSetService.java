@@ -8,11 +8,11 @@ import com.lumira.backend.resource.ArtifactType;
 import com.lumira.backend.resource.ResourceAuthorizationService;
 import com.lumira.backend.resource.ResourceShare;
 import com.lumira.backend.resource.ResourceShareRepository;
-import com.lumira.backend.resource.ResourceSharingService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -28,30 +28,27 @@ public class FlashcardSetService {
     private final FlashcardProgressRepository progress;
     private final ResourceShareRepository shares;
     private final ResourceAuthorizationService authorization;
-    private final ResourceSharingService sharing;
     private final FlashcardSetResponseMapper mapper;
 
     public FlashcardSetService(FlashcardSetRepository sets, FlashcardRepository cards,
             FlashcardProgressRepository progress, ResourceShareRepository shares,
-            ResourceAuthorizationService authorization, ResourceSharingService sharing,
+            ResourceAuthorizationService authorization,
             FlashcardSetResponseMapper mapper) {
         this.sets = sets;
         this.cards = cards;
         this.progress = progress;
         this.shares = shares;
         this.authorization = authorization;
-        this.sharing = sharing;
         this.mapper = mapper;
     }
 
     @Transactional
     public FlashcardSetResponse create(UUID cardId, UUID actorId, FlashcardSetCreateRequest request) {
-        Card card = authorization.requireCardUploadForUpdate(cardId, actorId);
+        authorization.requirePrivateArtifactCardForCreate(cardId, actorId);
         validateCards(request.cards());
         FlashcardSet set = sets.saveAndFlush(new FlashcardSet(ArtifactOwner.forCard(cardId),
                 request.title(), request.description()));
         persistNewCards(set.getId(), request.cards());
-        sharing.createCardShareIfShared(ArtifactType.FLASHCARD_SET, set.getId(), cardId, actorId);
         return mapper.from(set);
     }
 
@@ -64,9 +61,14 @@ public class FlashcardSetService {
         List<UUID> ids = shares.findByCardIdAndActiveTrueOrderByCreatedAtAsc(cardId).stream()
                 .filter(s -> s.getFlashcardSetId() != null).map(ResourceShare::getFlashcardSetId)
                 .toList();
-        List<FlashcardSet> values = sets.findAllById(ids).stream()
+        var visible = new LinkedHashMap<UUID, FlashcardSet>();
+        if (card.isOwnedBy(actorId)) {
+            sets.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId).forEach(set -> visible.put(set.getId(), set));
+        }
+        sets.findAllById(ids).forEach(set -> visible.put(set.getId(), set));
+        List<FlashcardSet> values = visible.values().stream()
                 .sorted(java.util.Comparator.comparing(FlashcardSet::getCreatedAt).reversed()).toList();
-        return mapper.fromMany(values);
+        return mapper.fromMany(values, Set.copyOf(ids));
     }
 
     @Transactional(readOnly = true)

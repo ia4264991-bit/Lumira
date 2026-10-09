@@ -186,6 +186,100 @@ class CardIntegrationTest extends BaseIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
+    @Test
+    @DisplayName("Only the Card owner can rename it")
+    void renameCard_isOwnerScoped() {
+        CardResponse card = createCard(userAId, "Before", null).getBody();
+        assertThat(card).isNotNull();
+
+        HttpHeaders headers = authHeaders(userAId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        ResponseEntity<CardResponse> renamed = restTemplate.exchange(
+                url("/v1/cards/" + card.id()), HttpMethod.PATCH,
+                new HttpEntity<>((Object) Map.of("name", "After"), headers), CardResponse.class);
+        assertThat(renamed.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(renamed.getBody().name()).isEqualTo("After");
+
+        HttpHeaders otherHeaders = authHeaders(userBId);
+        otherHeaders.setContentType(MediaType.APPLICATION_JSON);
+        ResponseEntity<Map> denied = restTemplate.exchange(
+                url("/v1/cards/" + card.id()), HttpMethod.PATCH,
+                new HttpEntity<>((Object) Map.of("name", "Stolen"), otherHeaders), Map.class);
+        assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("Deleting a private Card retains every actively shared artifact")
+    void deletePrivateCard_preservesSharedArtifactsAndDeletesPrivateContents() {
+        CardResponse privateCard = createCard(userAId, "Private study", null).getBody();
+        CardResponse courseSpace = createCard(userAId, "Biology", null).getBody();
+        assertThat(privateCard).isNotNull();
+        assertThat(courseSpace).isNotNull();
+        HttpHeaders auth = authHeaders(userAId);
+        restTemplate.exchange(url("/v1/cards/" + courseSpace.id() + "/share"), HttpMethod.POST,
+                new HttpEntity<>(auth), CardResponse.class);
+
+        UUID sharedResource = UUID.randomUUID();
+        UUID privateResource = UUID.randomUUID();
+        UUID sharedNote = UUID.randomUUID();
+        UUID privateNote = UUID.randomUUID();
+        UUID sharedStudySet = UUID.randomUUID();
+        UUID sharedQuiz = UUID.randomUUID();
+        UUID sharedFlashcardSet = UUID.randomUUID();
+        jdbcTemplate.update("insert into resource (id, owner_card_id, title, original_filename, mime_type, file_size_bytes, processing_status) values (?, ?, ?, ?, ?, ?, 'READY')",
+                sharedResource, privateCard.id(), "Shared PDF", "shared.pdf", "application/pdf", 10L);
+        jdbcTemplate.update("insert into resource (id, owner_card_id, title, original_filename, mime_type, file_size_bytes, processing_status) values (?, ?, ?, ?, ?, ?, 'READY')",
+                privateResource, privateCard.id(), "Private PDF", "private.pdf", "application/pdf", 10L);
+        jdbcTemplate.update("insert into note (id, owner_card_id, title, content) values (?, ?, ?, ?)",
+                sharedNote, privateCard.id(), "Shared note", "Keep me");
+        jdbcTemplate.update("insert into note (id, owner_card_id, title, content) values (?, ?, ?, ?)",
+                privateNote, privateCard.id(), "Private note", "Remove me");
+        jdbcTemplate.update("insert into study_set (id, owner_card_id, title, description) values (?, ?, ?, ?)",
+                sharedStudySet, privateCard.id(), "Shared set", "Keep me");
+        jdbcTemplate.update("insert into quiz (id, owner_card_id, title, description) values (?, ?, ?, ?)",
+                sharedQuiz, privateCard.id(), "Shared quiz", "Keep me");
+        jdbcTemplate.update("insert into flashcard_set (id, owner_card_id, title, description) values (?, ?, ?, ?)",
+                sharedFlashcardSet, privateCard.id(), "Shared cards", "Keep me");
+        jdbcTemplate.update("insert into artifact_share (resource_id, card_id, active) values (?, ?, true)", sharedResource, courseSpace.id());
+        jdbcTemplate.update("insert into artifact_share (note_id, card_id, active) values (?, ?, true)", sharedNote, courseSpace.id());
+        jdbcTemplate.update("insert into artifact_share (study_set_id, card_id, active) values (?, ?, true)", sharedStudySet, courseSpace.id());
+        jdbcTemplate.update("insert into artifact_share (quiz_id, card_id, active) values (?, ?, true)", sharedQuiz, courseSpace.id());
+        jdbcTemplate.update("insert into artifact_share (flashcard_set_id, card_id, active) values (?, ?, true)", sharedFlashcardSet, courseSpace.id());
+
+        ResponseEntity<Void> deleted = restTemplate.exchange(url("/v1/cards/" + privateCard.id()), HttpMethod.DELETE,
+                new HttpEntity<>(auth), Void.class);
+        assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(jdbcTemplate.queryForObject("select count(*) from card where id = ?", Integer.class, privateCard.id())).isZero();
+        assertThat(jdbcTemplate.queryForObject("select count(*) from resource where id = ?", Integer.class, privateResource)).isZero();
+        assertThat(jdbcTemplate.queryForObject("select count(*) from note where id = ?", Integer.class, privateNote)).isZero();
+        assertArtifactReowned("resource", sharedResource, userAId);
+        assertArtifactReowned("note", sharedNote, userAId);
+        assertArtifactReowned("study_set", sharedStudySet, userAId);
+        assertArtifactReowned("quiz", sharedQuiz, userAId);
+        assertArtifactReowned("flashcard_set", sharedFlashcardSet, userAId);
+        assertThat(jdbcTemplate.queryForObject("select count(*) from artifact_share where active = true and card_id = ?", Integer.class, courseSpace.id())).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("A Course Space must be dissolved, not deleted as a private Card")
+    void deleteSharedCard_returnsConflict() {
+        CardResponse courseSpace = createCard(userAId, "Shared", null).getBody();
+        assertThat(courseSpace).isNotNull();
+        HttpHeaders auth = authHeaders(userAId);
+        restTemplate.exchange(url("/v1/cards/" + courseSpace.id() + "/share"), HttpMethod.POST,
+                new HttpEntity<>(auth), CardResponse.class);
+
+        ResponseEntity<Map> response = restTemplate.exchange(url("/v1/cards/" + courseSpace.id()), HttpMethod.DELETE,
+                new HttpEntity<>(auth), Map.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(jdbcTemplate.queryForObject("select count(*) from card where id = ?", Integer.class, courseSpace.id())).isEqualTo(1);
+    }
+
+    private void assertArtifactReowned(String table, UUID artifactId, UUID userId) {
+        assertThat(jdbcTemplate.queryForObject("select owner_card_id from " + table + " where id = ?", UUID.class, artifactId)).isNull();
+        assertThat(jdbcTemplate.queryForObject("select owner_user_id from " + table + " where id = ?", UUID.class, artifactId)).isEqualTo(userId);
+    }
+
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------

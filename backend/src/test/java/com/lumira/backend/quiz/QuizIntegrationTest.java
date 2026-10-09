@@ -23,6 +23,7 @@ class QuizIntegrationTest extends BaseIntegrationTest {
     private UUID owner;
     private UUID member;
     private UUID other;
+    private UUID spaceOwner;
     private UUID personalCard;
     private UUID space;
 
@@ -32,7 +33,7 @@ class QuizIntegrationTest extends BaseIntegrationTest {
         owner = user("b6-owner");
         member = user("b6-member");
         other = user("b6-other");
-        UUID spaceOwner = user("b6-space-owner");
+        spaceOwner = user("b6-space-owner");
         personalCard = card(owner, "Personal", false);
         space = card(spaceOwner, "Course Space", false);
         assertThat(request(HttpMethod.POST, spaceOwner, "/v1/cards/" + space + "/share", null, Map.class)
@@ -86,6 +87,26 @@ class QuizIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM quiz WHERE id=?", Integer.class, quizId)).isEqualTo(1);
         assertThat(request(HttpMethod.DELETE, owner, "/v1/quizzes/" + quizId, null, Map.class).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM artifact_share WHERE quiz_id=?", Integer.class, quizId)).isZero();
+    }
+
+    @Test
+    @DisplayName("Course Space Quizzes are private until explicit sharing and members create on their linked Card")
+    void courseSpaceQuizPrivacyAndMemberCardOwnership() {
+        ResponseEntity<Map> created = request(HttpMethod.POST, spaceOwner,
+                "/v1/cards/" + space + "/quizzes", quizBody("Owner private quiz"), Map.class);
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        UUID quizId = UUID.fromString(created.getBody().get("id").toString());
+        assertThat(created.getBody().get("sharedWithThisCourseSpace")).isEqualTo(false);
+        assertThat(request(HttpMethod.GET, member, "/v1/cards/" + space + "/quizzes", null, Map[].class).getBody()).isEmpty();
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM artifact_share WHERE quiz_id=? AND active",
+                Integer.class, quizId)).isZero();
+        assertThat(request(HttpMethod.POST, member, "/v1/cards/" + space + "/quizzes",
+                quizBody("Should use member Card"), Map.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
+        request(HttpMethod.POST, spaceOwner, "/v1/artifacts/quiz/" + quizId + "/share", Map.of("cardId", space), Map.class);
+        Map[] shared = request(HttpMethod.GET, member, "/v1/cards/" + space + "/quizzes", null, Map[].class).getBody();
+        assertThat(shared).hasSize(1);
+        assertThat(shared[0].get("sharedWithThisCourseSpace")).isEqualTo(true);
     }
 
     @Test

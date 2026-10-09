@@ -12,7 +12,8 @@ data class LocalCardEntity(
     val name: String,
     val color: String,
     val createdAtMillis: Long,
-    val remoteCardId: String? = null
+    val remoteCardId: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "0") val isDeleted: Boolean = false
 )
 
 @Entity(tableName = "local_card_materials", indices = [Index("cardId")])

@@ -61,6 +61,35 @@ public class ResourceAuthorizationService {
         return card;
     }
 
+    /** Private study artifacts belong on the caller's Card, not the shared Course Space Card. */
+    public Card requirePrivateArtifactCardForCreate(UUID cardId, UUID actorId) {
+        Card card = requireCardUploadForUpdate(cardId, actorId);
+        if (card.isShared() && !card.isOwnedBy(actorId)) {
+            throw new ForbiddenException("Create private study artifacts on your linked member Card");
+        }
+        return card;
+    }
+
+    /** Resolve where generated study artifacts belong when Sarah is opened from a Course Space. */
+    @org.springframework.transaction.annotation.Transactional
+    public UUID privateArtifactDestinationForGeneration(UUID sourceCardId, UUID actorId) {
+        Card source = requireCardReadable(sourceCardId, actorId);
+        if (!source.isShared() || source.isOwnedBy(actorId)) return sourceCardId;
+
+        CardMembership membership = memberships.findCurrentForAuthorizationReadLock(sourceCardId, actorId,
+                        List.of(MembershipStatus.ACTIVE))
+                .orElseThrow(() -> new com.lumira.backend.common.error.ResourceNotFoundException("Course Space not found"));
+        Card memberCard = cards.findByIdForAuthorizationReadLock(membership.getMemberCardId())
+                .orElseThrow(() -> new com.lumira.backend.common.error.ResourceNotFoundException("Card not found"));
+        if (!memberCard.isOwnedBy(actorId)) {
+            throw new com.lumira.backend.common.error.ResourceNotFoundException("Card not found");
+        }
+        if (memberCard.isShared()) {
+            throw new ForbiddenException("A private Card is required to save generated study materials");
+        }
+        return memberCard.getId();
+    }
+
     private void requireUploadRole(Card card, UUID actorId) {
         MembershipRole role = activeRole(card, actorId);
         if (role != MembershipRole.OWNER && role != MembershipRole.ADMIN) {

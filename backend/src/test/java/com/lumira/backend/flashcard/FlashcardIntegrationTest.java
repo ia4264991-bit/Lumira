@@ -25,6 +25,7 @@ class FlashcardIntegrationTest extends BaseIntegrationTest {
     private UUID spaceOwner;
     private UUID personalCard;
     private UUID space;
+    private UUID memberCard;
 
     @BeforeEach
     void setup() {
@@ -38,7 +39,7 @@ class FlashcardIntegrationTest extends BaseIntegrationTest {
         assertThat(request(HttpMethod.POST, spaceOwner, "/v1/cards/" + space + "/share", null, Map.class).getStatusCode())
                 .isEqualTo(HttpStatus.OK);
         UUID ownerMemberCard = card(owner, "Owner member Card", false);
-        UUID memberCard = card(member, "Member Card", false);
+        memberCard = card(member, "Member Card", false);
         jdbcTemplate.update("INSERT INTO card_membership(card_id,user_id,member_card_id,status,role) VALUES (?,?,?,'ACTIVE','MEMBER')",
                 space, owner, ownerMemberCard);
         jdbcTemplate.update("INSERT INTO card_membership(card_id,user_id,member_card_id,status,role) VALUES (?,?,?,'ACTIVE','MEMBER')",
@@ -86,6 +87,28 @@ class FlashcardIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM flashcard_set WHERE id=?", Integer.class, setId)).isEqualTo(1);
         assertThat(request(HttpMethod.DELETE, owner, "/v1/flashcard-sets/" + setId, null, Map.class).getStatusCode())
                 .isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void courseSpaceFlashcardsRemainPrivateUntilExplicitShare() {
+        Map<String, Object> create = Map.of("title", "Owner private set", "description", "Private",
+                "cards", List.of(Map.of("position", 1, "front", "Q", "back", "A")));
+        ResponseEntity<Map> response = request(HttpMethod.POST, spaceOwner,
+                "/v1/cards/" + space + "/flashcard-sets", create, Map.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        UUID setId = UUID.fromString(response.getBody().get("id").toString());
+        assertThat(response.getBody().get("sharedWithThisCourseSpace")).isEqualTo(false);
+        assertThat(request(HttpMethod.GET, member, "/v1/cards/" + space + "/flashcard-sets", null, Map[].class).getBody()).isEmpty();
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM artifact_share WHERE flashcard_set_id=? AND active",
+                Integer.class, setId)).isZero();
+        assertThat(request(HttpMethod.POST, member, "/v1/cards/" + space + "/flashcard-sets",
+                create, Map.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
+        request(HttpMethod.POST, spaceOwner, "/v1/artifacts/flashcard_set/" + setId + "/share",
+                Map.of("cardId", space), Map.class);
+        Map[] shared = request(HttpMethod.GET, member, "/v1/cards/" + space + "/flashcard-sets", null, Map[].class).getBody();
+        assertThat(shared).hasSize(1);
+        assertThat(shared[0].get("sharedWithThisCourseSpace")).isEqualTo(true);
     }
 
     @Test
@@ -176,22 +199,25 @@ class FlashcardIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void makingAnExistingCardSharedActivatesItsFlashcardSetShareAndAdminCanCreateThere() {
+    void studyArtifactsStayPrivateWhenCardIsSharedAndAdminsUseTheirLinkedCard() {
         UUID personalSet = createSet(personalCard);
         assertThat(request(HttpMethod.POST, owner, "/v1/cards/" + personalCard + "/share", null, Map.class).getStatusCode())
                 .isEqualTo(HttpStatus.OK);
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM artifact_share WHERE flashcard_set_id=? AND card_id=? AND active",
-                Integer.class, personalSet, personalCard)).isEqualTo(1);
+                Integer.class, personalSet, personalCard)).isZero();
 
         jdbcTemplate.update("UPDATE card_membership SET role='ADMIN' WHERE card_id=? AND user_id=?", space, member);
         Map<String, Object> create = Map.of("title", "Course Set", "description", "Admin-created",
                 "cards", List.of(Map.of("position", 1, "front", "Q", "back", "A")));
         ResponseEntity<Map> response = request(HttpMethod.POST, member,
                 "/v1/cards/" + space + "/flashcard-sets", create, Map.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        response = request(HttpMethod.POST, member,
+                "/v1/cards/" + memberCard + "/flashcard-sets", create, Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         UUID courseSetId = UUID.fromString(response.getBody().get("id").toString());
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM artifact_share WHERE flashcard_set_id=? AND card_id=? AND active",
-                Integer.class, courseSetId, space)).isEqualTo(1);
+                Integer.class, courseSetId, space)).isZero();
     }
 
     private UUID createSet(UUID cardId) {

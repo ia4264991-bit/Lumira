@@ -1,8 +1,5 @@
 package com.aipdfreader.app.ui.library
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -61,6 +58,7 @@ import androidx.core.content.FileProvider
 import com.aipdfreader.app.domain.model.LocalMaterial
 import com.aipdfreader.app.domain.model.PdfDocument
 import com.aipdfreader.app.util.FileUtils
+import com.aipdfreader.app.ui.reader.InAppResourceViewer
 import kotlinx.coroutines.launch
 import java.io.File
 import java.text.DecimalFormat
@@ -78,6 +76,7 @@ fun LibraryScreen(
     val isAddingToCard by viewModel.isAddingToCard.collectAsState()
     val isLoadingCardTargets by viewModel.isLoadingCardTargets.collectAsState()
     var itemToAdd by remember { mutableStateOf<LibraryItem?>(null) }
+    var inAppMaterial by remember { mutableStateOf<LocalMaterial?>(null) }
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -94,6 +93,26 @@ fun LibraryScreen(
                 snackbarHostState.showSnackbar(it)
                 viewModel.dismissError()
             }
+        }
+    }
+
+    inAppMaterial?.let { material ->
+        val file = File(material.filePath)
+        if (!file.isFile) {
+            LaunchedEffect(material.filePath) {
+                snackbarHostState.showSnackbar("This saved file is no longer available.")
+                inAppMaterial = null
+            }
+        } else {
+            val uri = remember(material.filePath) {
+                runCatching { FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file) }.getOrNull()
+            }
+            if (uri == null) {
+                LaunchedEffect(material.filePath) {
+                    snackbarHostState.showSnackbar("Vision couldn’t open this saved file.")
+                    inAppMaterial = null
+                }
+            } else InAppResourceViewer(uri, material.displayName, material.mimeType) { inAppMaterial = null }
         }
     }
 
@@ -190,7 +209,10 @@ fun LibraryScreen(
                         )
                         is LibraryItem.File -> LocalMaterialCard(
                             material = item.material,
-                            onClick = { openLocalFile(context, item.material) },
+                            onClick = {
+                                if (File(item.material.filePath).isFile) inAppMaterial = item.material
+                                else scope.launch { snackbarHostState.showSnackbar("This saved file is no longer available.") }
+                            },
                             onAddToCard = { itemToAdd = item; viewModel.loadCardTargets() },
                             onDelete = { viewModel.delete(item) }
                         )
@@ -247,26 +269,6 @@ private fun LocalMaterialCard(material: LocalMaterial, onClick: () -> Unit, onAd
                 }
             }
         }
-    }
-}
-
-private fun openLocalFile(context: android.content.Context, material: LocalMaterial) {
-    val file = File(material.filePath)
-    if (!file.exists()) {
-        Toast.makeText(context, "This saved file is no longer available.", Toast.LENGTH_SHORT).show()
-        return
-    }
-    runCatching {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, material.mimeType)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, "Open file"))
-    }.onFailure { error ->
-        val message = if (error is ActivityNotFoundException) "No app can open this file type yet."
-        else "Couldn't open this file."
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
 }
 

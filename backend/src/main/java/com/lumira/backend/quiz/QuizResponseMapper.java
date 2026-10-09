@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Set;
 import java.util.Collection;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -24,6 +25,10 @@ public class QuizResponseMapper {
     }
 
     public List<QuizResponse> fromMany(List<Quiz> quizzes, Predicate<Quiz> revealCorrectness) {
+        return fromMany(quizzes, revealCorrectness, Set.of());
+    }
+
+    public List<QuizResponse> fromMany(List<Quiz> quizzes, Predicate<Quiz> revealCorrectness, Set<UUID> sharedIds) {
         if (quizzes.isEmpty()) return List.of();
         List<UUID> quizIds = quizzes.stream().map(Quiz::getId).toList();
         Map<UUID, List<QuizQuestion>> byQuiz = questions.findByQuizIdInOrderByQuizIdAscPositionAsc(quizIds).stream()
@@ -40,7 +45,8 @@ public class QuizResponseMapper {
                                     .map(option -> QuizOptionResponse.from(option, reveal)).toList()))
                     .toList();
             return new QuizResponse(quiz.getId(), quiz.getOwner().getOwningCardId(), quiz.getOwner().getOwningUserId(),
-                    quiz.getTitle(), quiz.getDescription(), questionResponses, quiz.getCreatedAt(), quiz.getUpdatedAt());
+                    quiz.getTitle(), quiz.getDescription(), questionResponses, quiz.getCreatedAt(), quiz.getUpdatedAt(),
+                    sharedIds.contains(quiz.getId()));
         }).toList();
     }
 }

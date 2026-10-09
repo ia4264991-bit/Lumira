@@ -90,6 +90,39 @@ class NotesStudySetsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("Notes and Study Sets on a Course Space remain private until explicitly shared")
+    void courseSpaceArtifactsRemainPrivateByDefault() {
+        UUID space = card(owner, "Shared workspace", false);
+        request(HttpMethod.POST, owner, "/v1/cards/" + space + "/share", null, Map.class);
+        UUID memberCard = card(other, "Member workspace", false);
+        jdbcTemplate.update("INSERT INTO card_membership(card_id,user_id,member_card_id,status,role) VALUES (?,?,?,'ACTIVE','MEMBER')",
+                space, other, memberCard);
+
+        Map<String, Object> createdNote = request(HttpMethod.POST, owner, "/v1/cards/" + space + "/notes",
+                Map.of("title", "Private note", "content", "Only the owner should see this"), Map.class).getBody();
+        Map<String, Object> createdSet = request(HttpMethod.POST, owner, "/v1/cards/" + space + "/studysets",
+                Map.of("title", "Private set", "description", "Only the owner should see this"), Map.class).getBody();
+        UUID noteId = UUID.fromString(createdNote.get("id").toString());
+        UUID setId = UUID.fromString(createdSet.get("id").toString());
+
+        assertThat(createdNote.get("sharedWithThisCourseSpace")).isEqualTo(false);
+        assertThat(createdSet.get("sharedWithThisCourseSpace")).isEqualTo(false);
+        assertThat(request(HttpMethod.GET, owner, "/v1/cards/" + space + "/notes", null, Map[].class).getBody()).hasSize(1);
+        assertThat(request(HttpMethod.GET, owner, "/v1/cards/" + space + "/studysets", null, Map[].class).getBody()).hasSize(1);
+        assertThat(request(HttpMethod.GET, other, "/v1/cards/" + space + "/notes", null, Map[].class).getBody()).isEmpty();
+        assertThat(request(HttpMethod.GET, other, "/v1/cards/" + space + "/studysets", null, Map[].class).getBody()).isEmpty();
+        assertThat(request(HttpMethod.POST, other, "/v1/cards/" + space + "/notes",
+                Map.of("title", "Wrong Card", "content", "private"), Map.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM artifact_share WHERE note_id=? AND active", Integer.class, noteId)).isZero();
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM artifact_share WHERE study_set_id=? AND active", Integer.class, setId)).isZero();
+
+        request(HttpMethod.POST, owner, "/v1/artifacts/note/" + noteId + "/share", Map.of("cardId", space), Map.class);
+        Map[] sharedNotes = request(HttpMethod.GET, other, "/v1/cards/" + space + "/notes", null, Map[].class).getBody();
+        assertThat(sharedNotes).hasSize(1);
+        assertThat(sharedNotes[0].get("sharedWithThisCourseSpace")).isEqualTo(true);
+    }
+
+    @Test
     @DisplayName("Note and StudySet use the same active Course Space share mechanism without ownership changes")
     void sharedArtifactsUseLiveMembershipAndUnshare() {
         UUID space = card(owner, "Course Space", false);

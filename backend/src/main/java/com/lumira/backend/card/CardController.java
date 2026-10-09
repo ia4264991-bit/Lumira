@@ -8,6 +8,8 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -85,5 +87,25 @@ public class CardController {
             @CurrentUser AuthenticatedUser currentUser
     ) {
         return CardResponse.from(courseSpaceService.getAccessibleCard(id, currentUser.userId()));
+    }
+
+    /** Rename a Card owned by the authenticated user, including an owned Course Space. */
+    @PatchMapping("/{id}")
+    public CardResponse renameCard(
+            @PathVariable UUID id,
+            @Valid @RequestBody RenameCardRequest request,
+            @CurrentUser AuthenticatedUser currentUser
+    ) {
+        return CardResponse.from(cardService.renameCard(id, currentUser.userId(), request.name()));
+    }
+
+    /** Delete a private Card and its private contents. Shared artifacts are retained as user-owned. */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deletePrivateCard(
+            @PathVariable UUID id,
+            @CurrentUser AuthenticatedUser currentUser
+    ) {
+        cardService.deletePrivateCard(id, currentUser.userId());
+        return ResponseEntity.noContent().build();
     }
 }

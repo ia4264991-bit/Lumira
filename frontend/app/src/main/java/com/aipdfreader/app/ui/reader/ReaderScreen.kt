@@ -9,11 +9,13 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,10 +27,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -65,10 +70,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -99,8 +106,10 @@ import java.io.File
 import java.util.UUID
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ReaderScreen(
     pdfId: Long,
@@ -112,6 +121,23 @@ fun ReaderScreen(
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val pageListState = rememberLazyListState()
+
+    LaunchedEffect(state.document?.id) {
+        val document = state.document ?: return@LaunchedEffect
+        pageListState.scrollToItem(state.currentPage.coerceIn(0, document.pageCount - 1))
+        snapshotFlow {
+            val layout = pageListState.layoutInfo
+            mostVisiblePdfPageIndex(
+                pages = layout.visibleItemsInfo.map { PdfViewportPage(it.index, it.offset, it.size) },
+                viewportStart = layout.viewportStartOffset,
+                viewportEnd = layout.viewportEndOffset
+            )
+        }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .collect(viewModel::goToPage)
+    }
 
     Scaffold(
         topBar = {
@@ -149,8 +175,14 @@ fun ReaderScreen(
                 PageNavigationBar(
                     currentPage = state.currentPage,
                     pageCount = doc.pageCount,
-                    onPrevious = viewModel::previousPage,
-                    onNext = viewModel::nextPage
+                    onPrevious = {
+                        scope.launch { pageListState.animateScrollToItem((state.currentPage - 1).coerceAtLeast(0)) }
+                    },
+                    onNext = {
+                        scope.launch {
+                            pageListState.animateScrollToItem((state.currentPage + 1).coerceAtMost(doc.pageCount - 1))
+                        }
+                    }
                 )
             }
         }
@@ -163,32 +195,80 @@ fun ReaderScreen(
             )
 
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                if (state.isLoadingPage && state.pageBitmap == null) {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                val document = state.document
+                if (document == null) {
+                    Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (state.isLoadingPage) CircularProgressIndicator()
+                        Text(state.errorMessage ?: "Opening document…", modifier = Modifier.padding(top = 12.dp))
+                    }
                 } else {
-                    // `viewModel::onLassoStrokeCaptured` is a bound method
-                    // reference — evaluating that expression allocates a new
-                    // function object every time this composable's body
-                    // re-executes, even though `viewModel` itself is stable
-                    // for the screen's lifetime. Since ZoomablePdfPage reads
-                    // it on every pointer-move during an active drag, an
-                    // unstable reference here can defeat recomposition
-                    // skipping for the whole page/overlay tree on totally
-                    // unrelated state changes (e.g. a highlight added
-                    // elsewhere). Wrapping it in `remember(viewModel)` gives
-                    // it stable identity across recompositions (M1.4).
-                    val onLassoStrokeCaptured = remember(viewModel) { viewModel::onLassoStrokeCaptured }
-                    val onLassoCornerMoved = remember(viewModel) { viewModel::moveLassoCorner }
-                    ZoomablePdfPage(
-                        bitmap = state.pageBitmap,
-                        highlightCount = state.pageHighlights.size,
-                        pageIndex = state.currentPage,
-                        selectionTool = state.selectionTool,
-                        isRefiningLasso = state.isRefiningLasso,
-                        lassoPolygon = state.lassoPolygon,
-                        onLassoStrokeCaptured = onLassoStrokeCaptured,
-                        onLassoCornerMoved = onLassoCornerMoved
-                    )
+                    LazyColumn(
+                        state = pageListState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(count = document.pageCount, key = { pageIndex -> pageIndex }) { pageIndex ->
+                            val bitmap = state.pageBitmaps[pageIndex]
+                            val isRendering = pageIndex in state.renderingPageIndexes
+                            val hasRenderError = pageIndex in state.pageErrors
+                            LaunchedEffect(pdfId, pageIndex, bitmap == null, isRendering, hasRenderError) {
+                                if (bitmap == null && !isRendering && !hasRenderError) {
+                                    viewModel.ensurePageRendered(pageIndex)
+                                }
+                            }
+                            val aspectRatio = state.pageAspectRatios[pageIndex]
+                                ?: bitmap?.let { it.width.toFloat() / it.height }
+                                ?: (1f / 1.414f)
+                            Box(
+                                Modifier.fillMaxWidth()
+                                    .aspectRatio(aspectRatio)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                if (bitmap != null && pageIndex == state.currentPage) {
+                                    val onLassoStrokeCaptured = remember(viewModel) { viewModel::onLassoStrokeCaptured }
+                                    val onLassoCornerMoved = remember(viewModel) { viewModel::moveLassoCorner }
+                                    ZoomablePdfPage(
+                                        bitmap = bitmap,
+                                        highlightCount = state.pageHighlights.size,
+                                        pageIndex = pageIndex,
+                                        selectionTool = state.selectionTool,
+                                        isRefiningLasso = state.isRefiningLasso,
+                                        lassoPolygon = state.lassoPolygon,
+                                        onLassoStrokeCaptured = onLassoStrokeCaptured,
+                                        onLassoCornerMoved = onLassoCornerMoved
+                                    )
+                                } else if (bitmap != null) {
+                                    Image(
+                                        bitmap = bitmap.asImageBitmap(),
+                                        contentDescription = "PDF page ${pageIndex + 1}",
+                                        modifier = Modifier.fillMaxSize().padding(8.dp)
+                                    )
+                                } else {
+                                    Column(
+                                        Modifier.align(Alignment.Center).padding(20.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        if (pageIndex in state.renderingPageIndexes) CircularProgressIndicator()
+                                        else {
+                                            Text(state.pageErrors[pageIndex] ?: "This page could not be displayed.")
+                                            TextButton(onClick = { viewModel.ensurePageRendered(pageIndex) }) { Text("Retry") }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    state.errorMessage?.let { message ->
+                        Surface(
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.errorContainer
+                        ) {
+                            Text(message, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                color = MaterialTheme.colorScheme.onErrorContainer)
+                        }
+                    }
                 }
             }
 
@@ -323,6 +403,7 @@ private fun SelectionToolToggle(
  * pointer cancels the in-progress stroke) — see [LassoGestureController]'s
  * KDoc for the full rationale.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ZoomablePdfPage(
     bitmap: android.graphics.Bitmap?,
@@ -337,8 +418,17 @@ private fun ZoomablePdfPage(
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
+    var viewportWidthPx by remember { mutableFloatStateOf(0f) }
+    var viewportHeightPx by remember { mutableFloatStateOf(0f) }
 
     val lassoGestureController = remember { LassoGestureController() }
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        scale = (scale * zoomChange).coerceIn(1f, 5f)
+        val maxOffsetX = (scale - 1f) * viewportWidthPx / 2f
+        val maxOffsetY = (scale - 1f) * viewportHeightPx / 2f
+        offsetX = (offsetX + panChange.x).coerceIn(-maxOffsetX, maxOffsetX)
+        offsetY = (offsetY + panChange.y).coerceIn(-maxOffsetY, maxOffsetY)
+    }
 
     // Imperative Path for the in-progress stroke — mutated directly, never
     // stored as a Compose List in state. `liveStrokeVersion` is the only
@@ -362,23 +452,29 @@ private fun ZoomablePdfPage(
             offsetY = 0f
         }
     }
+    LaunchedEffect(pageIndex) {
+        scale = 1f
+        offsetX = 0f
+        offsetY = 0f
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFE8E8E8))
             .clip(androidx.compose.ui.graphics.RectangleShape)
+            .onSizeChanged {
+                viewportWidthPx = it.width.toFloat()
+                viewportHeightPx = it.height.toFloat()
+            }
+            .then(
+                if (selectionTool == SelectionTool.TEXT) {
+                    Modifier.transformable(state = transformState, canPan = { scale > 1f })
+                } else Modifier
+            )
             .pointerInput(bitmap, selectionTool, isRefiningLasso) {
                 when (selectionTool) {
-                    SelectionTool.TEXT -> {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            scale = (scale * zoom).coerceIn(1f, 5f)
-                            val maxOffsetX = (scale - 1f) * size.width / 2f
-                            val maxOffsetY = (scale - 1f) * size.height / 2f
-                            offsetX = (offsetX + pan.x).coerceIn(-maxOffsetX, maxOffsetX)
-                            offsetY = (offsetY + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
-                        }
-                    }
+                    SelectionTool.TEXT -> Unit
 
                     SelectionTool.LASSO -> {
                         if (isRefiningLasso) {

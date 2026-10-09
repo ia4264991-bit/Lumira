@@ -27,6 +27,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
@@ -41,6 +45,10 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.DropdownMenu
@@ -58,12 +66,16 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -74,6 +86,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import android.content.Intent
 import androidx.compose.ui.Alignment
@@ -81,6 +94,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -98,24 +112,25 @@ fun CardHomeScreen(
     viewModel: CardHomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showCreate by remember { mutableStateOf(false) }
     var showJoin by remember { mutableStateOf(false) }
     var showInvitations by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showFeedback by remember { mutableStateOf(false) }
+    var renameTarget by remember { mutableStateOf<CardDto?>(null) }
+    var deleteTarget by remember { mutableStateOf<CardDto?>(null) }
+    var courseSpaceAction by remember { mutableStateOf<Pair<CardDto, Boolean>?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     val shared = selectedTab == 1
-    val localCards = state.localCards.map { local ->
-        CardDto(id = "local:${local.id}", ownerId = local.ownerUid, name = local.name,
-            color = local.color, isShared = false, role = "OWNER")
-    }
-    val mirroredCardIds = state.localCards.mapNotNull { it.remoteCardId }.toSet()
-    val allVisibleCards = if (shared) state.sharedCards else
-        state.personalCards.filterNot { it.isShared || it.id in mirroredCardIds } + localCards
+    val allVisibleCards = projectHomeCards(
+        personalCards = state.personalCards,
+        sharedCards = state.sharedCards,
+        localCards = state.localCards,
+        showingCourseSpaces = shared
+    )
     val visibleCards = allVisibleCards.filter { it.name.contains(searchQuery.trim(), ignoreCase = true) }
-    val hasCards = if (shared) state.sharedCards.isNotEmpty()
-        else state.personalCards.any { !it.isShared } || localCards.isNotEmpty()
+    val hasCards = allVisibleCards.isNotEmpty()
     val context = LocalContext.current
 
     if (showCreate) {
@@ -147,17 +162,78 @@ fun CardHomeScreen(
         )
     }
     if (showFeedback) FeedbackDialog(onDismiss = { showFeedback = false })
+    renameTarget?.let { card ->
+        var name by remember(card.id) { mutableStateOf(card.name) }
+        AlertDialog(
+            onDismissRequest = { if (!state.busy) renameTarget = null },
+            title = { Text(if (card.isShared) "Rename Course Space" else "Rename Card") },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(255) },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    enabled = !state.busy
+                )
+            },
+            confirmButton = {
+                TextButton(enabled = name.isNotBlank() && !state.busy, onClick = {
+                    viewModel.renameCard(card, name)
+                    renameTarget = null
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(enabled = !state.busy, onClick = { renameTarget = null }) { Text("Cancel") } }
+        )
+    }
+    deleteTarget?.let { card ->
+        AlertDialog(
+            onDismissRequest = { if (!state.busy) deleteTarget = null },
+            title = { Text("Delete Card?") },
+            text = { Text("This permanently deletes the Card and its private materials, Notes, Study Sets, Quizzes, and Flashcards. Items already shared with a Course Space are kept. This cannot be undone.") },
+            confirmButton = {
+                TextButton(enabled = !state.busy, onClick = {
+                    viewModel.deletePrivateCard(card)
+                    deleteTarget = null
+                }) { Text("Delete Card", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(enabled = !state.busy, onClick = { deleteTarget = null }) { Text("Cancel") } }
+        )
+    }
+    courseSpaceAction?.let { (card, isOwner) ->
+        AlertDialog(
+            onDismissRequest = { if (!state.busy) courseSpaceAction = null },
+            title = { Text(if (isOwner) "Dissolve Course Space?" else "Leave Course Space?") },
+            text = {
+                Text(if (isOwner)
+                    "Sharing will stop and members will lose access through this Course Space. Shared materials and private member content are preserved."
+                else "You will lose access to this Course Space. Your personal Card and private study content are kept.")
+            },
+            confirmButton = {
+                TextButton(enabled = !state.busy, onClick = {
+                    if (isOwner) viewModel.dissolveCourseSpace(card) else viewModel.leaveCourseSpace(card)
+                    courseSpaceAction = null
+                }) { Text(if (isOwner) "Dissolve" else "Leave") }
+            },
+            dismissButton = { TextButton(enabled = !state.busy, onClick = { courseSpaceAction = null }) { Text("Cancel") } }
+        )
+    }
     Scaffold(
         topBar = {
-            LargeTopAppBar(
+            TopAppBar(
                 title = {
-                    Column {
-                        Text("Vision")
-                        Text(
-                            if (shared) "Learn together" else "Your learning space",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.padding(end = 10.dp).size(10.dp).clip(CircleShape)
+                                .background(Color(0xFFF2A93C))
                         )
+                        Column {
+                            Text("Vision", fontWeight = FontWeight.Bold)
+                            Text(
+                                if (shared) "Learn together" else "Your learning space",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -209,22 +285,24 @@ fun CardHomeScreen(
         },
         bottomBar = {
             NavigationBar {
-                NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Filled.Home, contentDescription = null) }, label = { Text("Cards") })
-                NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Filled.Groups, contentDescription = null) }, label = { Text("Course Spaces") })
+                NavigationBarItem(selected = true, onClick = { selectedTab = 0 },
+                    icon = { Icon(Icons.Filled.Home, contentDescription = null) }, label = { Text("Home") })
                 NavigationBarItem(selected = false, onClick = onOpenLibrary,
                     icon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) }, label = { Text("On this phone") })
+                NavigationBarItem(selected = false, onClick = onOpenAccount,
+                    icon = { Icon(Icons.Filled.AccountCircle, contentDescription = null) }, label = { Text("Profile") })
             }
         }
     ) { padding ->
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 150.dp),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp,
-                top = padding.calculateTopPadding() + 12.dp, bottom = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                top = padding.calculateTopPadding() + 10.dp, bottom = padding.calculateBottomPadding() + 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 HomeWelcome(
                     showingCourseSpaces = shared,
                     learnerName = state.learnerName,
@@ -235,7 +313,33 @@ fun CardHomeScreen(
                     onCreateCourseSpace = { showCreate = true }
                 )
             }
-            item {
+            if (state.offline) item(span = { GridItemSpan(maxLineSpan) }) {
+                val synced = state.lastSyncedAtMillis?.let {
+                    android.text.format.DateUtils.getRelativeTimeSpanString(it).toString()
+                }
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text("Offline", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            synced?.let { "Showing your last sync from $it." }
+                                ?: "Your saved Cards stay available on this phone.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    listOf("Cards", "Course Spaces").forEachIndexed { index, label ->
+                        SegmentedButton(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            shape = SegmentedButtonDefaults.itemShape(index, 2)
+                        ) { Text(label) }
+                    }
+                }
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
@@ -251,7 +355,7 @@ fun CardHomeScreen(
                     shape = RoundedCornerShape(18.dp)
                 )
             }
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(if (shared) "Shared with you" else "Your Cards",
@@ -261,7 +365,7 @@ fun CardHomeScreen(
                 }
             }
             if (state.loading && visibleCards.isEmpty()) {
-                item {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Checking your online Cards…", style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -269,7 +373,7 @@ fun CardHomeScreen(
                     }
                 }
             } else if (state.error && visibleCards.isEmpty()) {
-                item {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                         Column(Modifier.fillMaxWidth().padding(18.dp)) {
                             Text(state.message.orEmpty(), color = MaterialTheme.colorScheme.onErrorContainer)
@@ -279,23 +383,65 @@ fun CardHomeScreen(
                     }
                 }
             } else if (visibleCards.isEmpty() && searchQuery.isNotBlank()) {
-                item { Text("No ${if (shared) "Course Spaces" else "Cards"} match ‘$searchQuery’.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text("No ${if (shared) "Course Spaces" else "Cards"} match ‘$searchQuery’.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             } else if (visibleCards.isEmpty()) {
-                item { EmptyCardsState(shared, onCreate = { showCreate = true }, onJoin = { showJoin = true }) }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    EmptyCardsState(shared, onCreate = { showCreate = true }, onJoin = { showJoin = true })
+                }
             } else {
-                items(visibleCards.distinctBy { it.id }, key = { it.id }) { card ->
-                    HomeCardItem(card = card, onClick = { onOpenCard(card) })
+                items(visibleCards.distinctBy { it.id }, key = { it.id }, span = { GridItemSpan(1) }) { card ->
+                    HomeCardItem(
+                        card = card,
+                        activeMembers = state.membersByCardId[card.id],
+                        onClick = { onOpenCard(card) },
+                        onRename = { renameTarget = card },
+                        onDelete = { deleteTarget = card },
+                        onLeave = { courseSpaceAction = card to false },
+                        onDissolve = { courseSpaceAction = card to true }
+                    )
                 }
             }
-            state.message?.let { message ->
-                item {
+            state.message?.takeUnless { state.offline }?.let { message ->
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Text(message, color = if (state.error) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            if (shared) item { TextButton(onClick = { showJoin = true }) { Text("Join with an invite link") } }
+            if (shared) item(span = { GridItemSpan(maxLineSpan) }) {
+                TextButton(onClick = { showJoin = true }) { Text("Join with an invite link") }
+            }
         }
     }
+}
+
+internal fun projectHomeCards(
+    personalCards: List<CardDto>,
+    sharedCards: List<CardDto>,
+    localCards: List<com.aipdfreader.app.data.local.entity.LocalCardEntity>,
+    showingCourseSpaces: Boolean
+): List<CardDto> {
+    if (showingCourseSpaces) return sharedCards
+    val linkedMemberCardIds = sharedCards.mapNotNull { it.memberCardId }.toSet()
+    val sharedCardIds = sharedCards.map { it.id }.toSet()
+    val mirroredCardIds = localCards.mapNotNull { it.remoteCardId }.toSet()
+    val localPersonalCards = localCards.filterNot { local -> local.isDeleted ||
+        local.remoteCardId?.let { it in sharedCardIds || it in linkedMemberCardIds } == true
+    }.map { local ->
+        CardDto(
+            id = "local:${local.id}",
+            ownerId = local.ownerUid,
+            name = local.name,
+            color = local.color,
+            isShared = false,
+            role = "OWNER"
+        )
+    }
+    val remotePersonalCards = personalCards.filterNot {
+        it.isShared || it.id in mirroredCardIds || it.id in linkedMemberCardIds
+    }
+    return remotePersonalCards + localPersonalCards
 }
 
 @Composable
@@ -448,21 +594,142 @@ private fun HomeWelcome(
 }
 
 @Composable
-private fun HomeCardItem(card: CardDto, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(52.dp).clip(MaterialTheme.shapes.medium)
-                .background(parseCardColor(card.color)), contentAlignment = Alignment.Center) {
-                Icon(if (card.isShared) Icons.Filled.Groups else Icons.Filled.AutoStories,
-                    contentDescription = null, tint = Color.White, modifier = Modifier.size(27.dp))
+private fun HomeCardItem(
+    card: CardDto,
+    activeMembers: List<com.aipdfreader.app.data.remote.dto.MemberDto>?,
+    onClick: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    onLeave: () -> Unit,
+    onDissolve: () -> Unit
+) {
+    val cardColor = parseCardColor(card.color)
+    val foreground = MaterialTheme.colorScheme.onSurface
+    val surface = cardColor.copy(alpha = .16f).compositeOver(MaterialTheme.colorScheme.surfaceContainerLow)
+    val isLocal = card.id.startsWith("local:")
+    var showActions by remember(card.id) { mutableStateOf(false) }
+    Card(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 174.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top) {
+                Box(
+                    Modifier.size(46.dp).clip(RoundedCornerShape(16.dp))
+                        .background(cardColor.copy(alpha = .16f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        if (card.isShared) Icons.Filled.Groups else Icons.Filled.AutoStories,
+                        contentDescription = null,
+                        tint = cardColor,
+                        modifier = Modifier.size(25.dp)
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = foreground.copy(alpha = .14f),
+                        contentColor = foreground
+                    ) {
+                        Text(
+                            if (card.isShared) card.role?.lowercase()?.replaceFirstChar(Char::uppercase) ?: "Shared"
+                            else "Private",
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Box {
+                        IconButton(onClick = { showActions = true }, modifier = Modifier.size(44.dp)) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "${card.name} options", tint = foreground)
+                        }
+                        DropdownMenu(expanded = showActions, onDismissRequest = { showActions = false }) {
+                            if (!card.isShared || card.role.equals("OWNER", ignoreCase = true)) {
+                                DropdownMenuItem(
+                                    text = { Text("Rename") },
+                                    leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                                    onClick = { showActions = false; onRename() }
+                                )
+                            }
+                            when {
+                                card.isShared && card.role.equals("OWNER", ignoreCase = true) -> DropdownMenuItem(
+                                    text = { Text("Dissolve Course Space") },
+                                    leadingIcon = { Icon(Icons.Filled.Archive, contentDescription = null) },
+                                    onClick = { showActions = false; onDissolve() }
+                                )
+                                card.isShared -> DropdownMenuItem(
+                                    text = { Text("Leave Course Space") },
+                                    leadingIcon = { Icon(Icons.Filled.Logout, contentDescription = null) },
+                                    onClick = { showActions = false; onLeave() }
+                                )
+                                else -> DropdownMenuItem(
+                                    text = { Text("Delete Card", color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                    onClick = { showActions = false; onDelete() }
+                                )
+                            }
+                        }
+                    }
+                }
             }
-            Column(Modifier.weight(1f).padding(start = 14.dp)) {
-                Text(card.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(5.dp))
-                Text("${if (card.isShared) "Course Space" else if (card.id.startsWith("local:")) "On this phone · works offline" else "Personal Card"}${if (card.isShared) card.role?.let { " · $it" }.orEmpty() else ""}",
-                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Column(Modifier.fillMaxWidth().padding(top = 18.dp)) {
+                Text(
+                    card.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = foreground,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(6.dp))
+                if (card.isShared) {
+                    val members = activeMembers.orEmpty()
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        MemberAvatarStack(count = members.size, foreground = foreground)
+                        Text(
+                            activeMembers?.let { "${members.size} ${if (members.size == 1) "member" else "members"}" }
+                                ?: "Members",
+                            modifier = Modifier.padding(start = 7.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = foreground.copy(alpha = .88f)
+                        )
+                    }
+                } else {
+                    Text(
+                        if (isLocal) "On this phone · works offline" else "Personal Card",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = foreground.copy(alpha = .88f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun MemberAvatarStack(count: Int, foreground: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        repeat(minOf(count, 3)) { index ->
+            Box(
+                Modifier.padding(start = if (index == 0) 0.dp else (-7).dp)
+                    .size(22.dp).clip(CircleShape)
+                    .background(foreground.copy(alpha = .22f))
+                    .border(1.dp, foreground.copy(alpha = .7f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Filled.AccountCircle, contentDescription = null,
+                    tint = foreground, modifier = Modifier.size(16.dp))
+            }
+        }
+        if (count > 3) {
+            Text("+${count - 3}", modifier = Modifier.padding(start = 4.dp),
+                color = foreground, style = MaterialTheme.typography.labelSmall)
         }
     }
 }

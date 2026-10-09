@@ -12,16 +12,46 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface LocalCardDao {
     @Query("SELECT * FROM local_cards WHERE ownerUid = :ownerUid ORDER BY createdAtMillis DESC")
+    fun observeAllCards(ownerUid: String): Flow<List<LocalCardEntity>>
+
+    @Query("SELECT * FROM local_cards WHERE ownerUid = :ownerUid AND isDeleted = 0 ORDER BY createdAtMillis DESC")
     fun observeCards(ownerUid: String): Flow<List<LocalCardEntity>>
 
-    @Query("SELECT * FROM local_cards WHERE id = :cardId LIMIT 1")
+    @Query("SELECT * FROM local_cards WHERE id = :cardId AND isDeleted = 0 LIMIT 1")
     suspend fun getCard(cardId: String): LocalCardEntity?
 
     @Query("SELECT * FROM local_cards WHERE ownerUid = :ownerUid ORDER BY createdAtMillis ASC")
     suspend fun getCardsForSync(ownerUid: String): List<LocalCardEntity>
 
+    @Query("SELECT * FROM local_cards WHERE id = :cardId AND ownerUid = :ownerUid LIMIT 1")
+    suspend fun getCardForSync(ownerUid: String, cardId: String): LocalCardEntity?
+
+    @Query("UPDATE local_cards SET remoteCardId = :remoteCardId WHERE id = :cardId AND ownerUid = :ownerUid AND remoteCardId IS NULL AND isDeleted = 0")
+    suspend fun setRemoteCardId(cardId: String, ownerUid: String, remoteCardId: String): Int
+
     @Query("UPDATE local_cards SET remoteCardId = :remoteCardId WHERE id = :cardId AND ownerUid = :ownerUid AND remoteCardId IS NULL")
-    suspend fun setRemoteCardId(cardId: String, ownerUid: String, remoteCardId: String)
+    suspend fun recordRemoteCardIdForDeletion(cardId: String, ownerUid: String, remoteCardId: String): Int
+
+    @Query("UPDATE local_cards SET name = :name WHERE id = :cardId AND ownerUid = :ownerUid AND isDeleted = 0")
+    suspend fun updateCardName(cardId: String, ownerUid: String, name: String): Int
+
+    @Query("UPDATE local_cards SET name = :name WHERE ownerUid = :ownerUid AND remoteCardId = :remoteCardId AND isDeleted = 0")
+    suspend fun updateCardNameByRemoteId(ownerUid: String, remoteCardId: String, name: String): Int
+
+    @Query("UPDATE local_cards SET isDeleted = 1 WHERE id = :cardId AND ownerUid = :ownerUid AND isDeleted = 0")
+    suspend fun markCardDeleted(cardId: String, ownerUid: String): Int
+
+    @Query("SELECT filePath FROM local_card_materials WHERE cardId = :cardId")
+    suspend fun getMaterialPaths(cardId: String): List<String>
+
+    @Query("DELETE FROM local_card_materials WHERE cardId = :cardId")
+    suspend fun deleteMaterialsForCard(cardId: String)
+
+    @Query("DELETE FROM local_card_notes WHERE cardId = :cardId")
+    suspend fun deleteNotesForCard(cardId: String)
+
+    @Query("DELETE FROM local_cards WHERE id = :cardId AND ownerUid = :ownerUid AND isDeleted = 1")
+    suspend fun deleteTombstonedCard(cardId: String, ownerUid: String): Int
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertCard(card: LocalCardEntity)

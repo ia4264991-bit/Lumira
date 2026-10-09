@@ -209,6 +209,31 @@ class SarahFoundationIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM study_set WHERE title='Generated StudySet'", Integer.class)).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("A Course Space member's generated Quiz is saved privately to their linked member Card")
+    void memberGenerationUsesSharedSourcesButStoresPrivateArtifactOnMemberCard() {
+        UUID sharedSource = readyResource(space, "Course source", "authorized shared course material");
+        assertThat(request(HttpMethod.POST, owner, "/v1/artifacts/resource/" + sharedSource + "/share",
+                Map.of("cardId", space), Map.class).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        router.setGenerationOutput("""
+                {"title":"Private generated quiz","description":"Review","questions":[{"position":1,"prompt":"Question?","options":[{"position":1,"text":"Right","correct":true},{"position":2,"text":"Wrong","correct":false}]}]}
+                """);
+
+        ResponseEntity<Map> generated = request(HttpMethod.POST, member, "/v1/cards/" + space + "/sarah/generate",
+                Map.of("artifactType", "quiz", "sourceResourceIds", List.of(sharedSource),
+                        "instructions", "Use medium difficulty"), Map.class);
+
+        assertThat(generated.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(jdbcTemplate.queryForObject("SELECT owner_card_id FROM quiz WHERE title='Private generated quiz'",
+                UUID.class)).isEqualTo(memberCard);
+        ResponseEntity<List> visibleInCourseSpace = request(HttpMethod.GET, member,
+                "/v1/cards/" + space + "/quizzes", null, List.class);
+        ResponseEntity<List> visibleOnMemberCard = request(HttpMethod.GET, member,
+                "/v1/cards/" + memberCard + "/quizzes", null, List.class);
+        assertThat(visibleInCourseSpace.getBody()).isEmpty();
+        assertThat(visibleOnMemberCard.getBody()).hasSize(1);
+    }
+
     private UUID createNote(UUID actor, UUID cardId, String title, String content) {
         ResponseEntity<Map> response = request(HttpMethod.POST, actor, "/v1/cards/" + cardId + "/notes",
                 Map.of("title", title, "content", content), Map.class);

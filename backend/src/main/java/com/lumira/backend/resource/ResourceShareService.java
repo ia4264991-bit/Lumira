@@ -1,13 +1,5 @@
 package com.lumira.backend.resource;
 
-import com.lumira.backend.study.Note;
-import com.lumira.backend.study.NoteRepository;
-import com.lumira.backend.study.StudySet;
-import com.lumira.backend.study.StudySetRepository;
-import com.lumira.backend.quiz.Quiz;
-import com.lumira.backend.quiz.QuizRepository;
-import com.lumira.backend.flashcard.FlashcardSet;
-import com.lumira.backend.flashcard.FlashcardSetRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,31 +10,17 @@ import java.util.UUID;
 public class ResourceShareService {
     private final ResourceRepository resources;
     private final ResourceShareRepository shares;
-    private final NoteRepository notes;
-    private final StudySetRepository studySets;
-    private final QuizRepository quizzes;
-    private final FlashcardSetRepository flashcardSets;
 
-    public ResourceShareService(ResourceRepository resources, ResourceShareRepository shares,
-            NoteRepository notes, StudySetRepository studySets, QuizRepository quizzes,
-            FlashcardSetRepository flashcardSets) {
+    public ResourceShareService(ResourceRepository resources, ResourceShareRepository shares) {
         this.resources = resources;
         this.shares = shares;
-        this.notes = notes;
-        this.studySets = studySets;
-        this.quizzes = quizzes;
-        this.flashcardSets = flashcardSets;
     }
 
-    /** AD-022: eligible artifacts become shared when the owning Card becomes a Course Space. */
-    public void activateAllForCard(UUID cardId) {
+    /** AD-022/084: Resources default to shared when their Card becomes a Course Space. */
+    public void activateResourcesForCard(UUID cardId) {
         for (Resource resource : resources.findByOwnerCardIdForUpdateOrderById(cardId)) {
             activate(ArtifactType.RESOURCE, resource.getId(), cardId);
         }
-        for (Note note : notes.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId)) activate(ArtifactType.NOTE, note.getId(), cardId);
-        for (StudySet set : studySets.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId)) activate(ArtifactType.STUDYSET, set.getId(), cardId);
-        for (Quiz quiz : quizzes.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId)) activate(ArtifactType.QUIZ, quiz.getId(), cardId);
-        for (FlashcardSet set : flashcardSets.findByOwner_OwningCardIdOrderByCreatedAtDesc(cardId)) activate(ArtifactType.FLASHCARD_SET, set.getId(), cardId);
     }
 
     /** AD-063: dissolution revokes Course-Space visibility while retaining Resources. */

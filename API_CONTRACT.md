@@ -132,9 +132,14 @@ GET /v1/cards?scope=shared
   `scope=shared` returns Cards where `isShared=true` that the caller owns
   or is an active member of; the default (no `scope`) returns every Card
   the caller owns. There is no separate "Course Spaces" endpoint family.
-- Response: paginated array of the Card shape above, each also including
-  `role` (`OWNER`/`ADMIN`/`MEMBER`, AD-023) when returned in the
-  `scope=shared` view, from the caller's own `card_membership` row.
+- Response: paginated array of the Card shape above. In `scope=shared`,
+  each result also includes `role` (`OWNER`/`ADMIN`/`MEMBER`, AD-023) and
+  `memberCardId`, both derived from the caller's own ACTIVE
+  `card_membership` row. For the Owner, `memberCardId` equals the Course
+  Space Card ID; for a Member/Admin, it is that caller's own linked Card
+  ID (AD-067/084). It is caller-specific and must not be inferred from
+  another member's row or a Card name. The default personal-Card view may
+  omit `memberCardId`.
 
 ```
 GET /v1/cards/{cardId}
@@ -145,6 +150,30 @@ GET /v1/cards/{cardId}
 - Response `200`: Card shape, `404` if not found or not authorized (never
   distinguish "doesn't exist" from "not authorized" in the response body —
   AD-056's BOLA/IDOR guard).
+
+```http
+PATCH /v1/cards/{cardId}
+```
+- Auth: required. Owner only; an active Course Space member who is not the
+  Card owner receives the same `404` as an inaccessible Card.
+- Request: `{ "name": "nonblank string, at most 255 characters" }`.
+- Updates the Card name for both private Cards and an owned Course Space.
+
+```http
+DELETE /v1/cards/{cardId}
+```
+- Auth: required. Owner of a private Card only; Course Spaces must use the
+  existing Owner-only `DELETE /v1/cards/{cardId}/share` dissolution operation.
+- Response `204` on success. Absent or non-owned Cards return `404`.
+- A Card referenced by any membership episode, join request, or Course Space
+  event cannot be deleted (`409`); this preserves the membership and append-only
+  event history. A Course Space Owner must dissolve rather than delete.
+- Private artifacts owned by the Card are deleted with it. Any Resource, Note,
+  Study Set, Quiz, or Flashcard Set with an active share into a Course Space is
+  reassigned to the same User as a direct User-owned artifact before Card
+  removal; its active share records and content are retained. Unshared private
+  artifacts and their dependent study state are deleted. The operation is
+  transactional and does not delete another User's or Course Space's data.
 
 ---
 
@@ -160,6 +189,7 @@ POST /v1/cards/{cardId}/share
 
 - Auth required; only the Card owner may enable sharing.
 - Sets `isShared=true` and creates the Owner's ACTIVE/OWNER membership if absent. That membership's `memberCardId` is the Course Space Card itself (AD-067).
+- Existing Resources become visible through Resource share records as defined by AD-022. Existing Notes, Study Sets, Quizzes, and Flashcard Sets remain private unless they were explicitly shared; enabling sharing does not create shares for them (AD-084).
 - Response `200`: updated Card.
 
 ### Invite link (AD-024, AD-062, AD-069)
@@ -186,7 +216,11 @@ POST /v1/cards/{cardId}/join-requests/{requestId}/reject
 
 - Join requires authentication. A stale or reset token returns `410 Gone`.
 - If approval is disabled, the request immediately creates an ACTIVE MEMBER membership and creates or reuses that user's member Card. A first join creates one Card; a rejoin locates the historical membership, reuses its `memberCardId`, and creates a new membership episode. The new/reused Card belongs to the requesting User. Resources are referenced, never copied, when the Resource feature is implemented; private study artifacts are not inherited.
-- Immediate join response `201`: the member Card shape.
+- Immediate join response `201`: the member Card shape; its `id` is the
+  caller's `memberCardId`. The Android client refreshes the authenticated
+  `scope=shared` view after joining to restore the Course Space and
+  caller-specific `memberCardId` relationship across app restarts and
+  devices (AD-084).
 - If approval is enabled, joining creates only a separate PENDING `card_join_request`; it creates neither a membership nor a Card yet. Response `202`: `{ "joinRequestId": "uuid", "status": "PENDING" }`.
 - A request stores `id`, `cardId`, `requestingUserId`, `inviteTokenVersion`, `status`, `createdAt`, `resolvedAt`, and `resolvedByUserId`. Request statuses are `PENDING`, `APPROVED`, `REJECTED`, and `INVALIDATED`; these are not `card_membership` statuses. `resolvedAt` and `resolvedByUserId` are null while PENDING.
 - Only the Course Space Owner or an ACTIVE Admin may list, approve, or reject join requests. Approval revalidates the request's invite version and atomically creates an ACTIVE MEMBER membership referencing the created/reused member Card; response `201` is the member Card. Rejection records REJECTED and the resolver/time, creates no membership/Card, and returns `200` with `{ "status": "REJECTED" }`.
@@ -348,7 +382,9 @@ DELETE /v1/notes/{noteId}
 Note create/update fields: `{ "title": "string", "content": "string" }`.
 PATCH fields are optional; omitted fields remain unchanged. Responses expose
 `id`, `ownerCardId`, `ownerUserId`, `title`, `content`, `createdAt`, and
-`updatedAt`. Delete returns `204 No Content`.
+`updatedAt`. List responses also include `sharedWithThisCourseSpace`, true
+only when that artifact is actively shared into the requested Course Space.
+Delete returns `204 No Content`.
 
 ```http
 POST   /v1/cards/{cardId}/studysets
@@ -361,7 +397,9 @@ DELETE /v1/studysets/{studySetId}
 StudySet create/update fields: `{ "title": "string", "description": "string" }`.
 PATCH fields are optional; omitted fields remain unchanged. Responses expose
 `id`, `ownerCardId`, `ownerUserId`, `title`, `description`, `createdAt`, and
-`updatedAt`. Delete returns `204 No Content`. B5 has no typed child items.
+`updatedAt`. List responses also include `sharedWithThisCourseSpace`, true
+only when that artifact is actively shared into the requested Course Space.
+Delete returns `204 No Content`. B5 has no typed child items.
 
 🔒 AD-030/076: one canonical entity per type, with no private/Course-Space
 forks and no additional Note structure or StudySet item schema. Create on a
@@ -371,7 +409,20 @@ and delete require persisted artifact ownership. Delete removes associated
 share records transactionally but does not change ownership/account-deletion
 semantics. Sharing reuses the generic `/share`/`/force-unshare` endpoints
 above with `artifactType=note|studyset`; it never adds sharing state to the
-artifact row. Summary endpoints remain future scope.
+artifact row. Notes, Study Sets, Quizzes, and Flashcard Sets are private by
+default even when created on a shared Card; creation must not create a share
+record. An explicit generic artifact-share request is required to expose an
+artifact to Course Space members (AD-022/045/084). On a shared Card, the
+owner's list may include that caller's own private artifacts plus active
+shares; other members receive only artifacts actively shared into that
+Course Space. Private artifact create requests use the caller's
+`memberCardId`: the Owner's value is the Course Space Card itself, while an
+Admin or Member uses their own linked private Card. A non-owner create on the
+shared Course Space Card is rejected; this prevents an Admin's or Member's
+private content from being owned by the Course Space Owner. Artifact list
+responses include `sharedWithThisCourseSpace` to distinguish private items
+from active shares in that Course Space.
+Summary endpoints remain future scope.
 
 ---
 
@@ -417,7 +468,9 @@ question, every question at least two options, and exactly one correct
 option. Title and prompt must be nonblank; description and option text are
 required strings. The complete Quiz is validated before transactional
 replacement. Responses include `id`, owner IDs, title, description,
-questions/options, and timestamps. Correctness is returned only to the
+questions/options, timestamps, and `sharedWithThisCourseSpace` in list
+responses. It is true only for an active share into the requested Course
+Space. Correctness is returned only to the
 persisted artifact owner; readers authorized through a share receive
 question/option content with the `correct` value set to `null`.
 
@@ -474,8 +527,9 @@ PATCH omission preserves the current array, while a supplied array replaces
 it. A supplied card ID must belong to the set and may occur only once;
 omitted IDs are generated. Positions must be unique positive integers;
 responses always sort cards by position. Front/back are required strings.
-Responses include owner IDs and timestamps, and never include personal
-progress. Set update/delete require persisted artifact ownership. Delete
+Responses include owner IDs, timestamps, and `sharedWithThisCourseSpace`
+in list responses; it is true only for an active share into the requested
+Course Space. Responses never include personal progress. Set update/delete require persisted artifact ownership. Delete
 removes that set's cards, private progress, and generic share records
 transactionally and returns `204 No Content`. Sharing uses the existing
 `/v1/artifacts/flashcard_set/{setId}/share` and existing unshare/
@@ -608,6 +662,7 @@ just an architecture pointer** (`SARAH_SECURITY_SPEC.md`):
 POST /v1/cards/{cardId}/sarah/generate
 ```
 - Request: `{ "artifactType": "flashcardset|quiz|studyset", "sourceResourceIds": ["uuid", ...], "instructions": "string|null" }`.
+- When `{cardId}` is a Course Space, Sarah validates each explicitly selected Resource against the caller's live Course Space/member-Card access. The Course Space Owner's generated artifact is stored on the Course Space Card; every other member's artifact is stored on that caller's linked `memberCardId` and remains private unless explicitly shared. A member's read access to the Course Space never grants permission to create an artifact on its shared Card (AD-084).
 - 🔒 AD-035/081: FlashcardSet, Quiz, and StudySet generation are current B10 targets. Summary remains an approved first-class artifact and intended MVP generation target, but its concrete persistence, content, DTO, CRUD, and generation contracts are deferred under AD-081. No placeholder Summary response or endpoint is defined.
 - 🔒 AD-055 + AD-065: output is validated as a **complete whole before
   persistence** — if any required component fails validation, the entire

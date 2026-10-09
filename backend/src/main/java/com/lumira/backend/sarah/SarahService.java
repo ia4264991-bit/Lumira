@@ -70,7 +70,7 @@ public class SarahService {
     }
 
     public SarahGeneratedArtifact generate(UUID cardId, UUID userId, SarahGenerationRequest request) {
-        authorization.requireCardUpload(cardId, userId);
+        UUID destinationCardId = authorization.privateArtifactDestinationForGeneration(cardId, userId);
         if (request.sourceResourceIds().stream().distinct().count() != request.sourceResourceIds().size()) {
             throw generationFailure("Source Resource IDs must be unique");
         }
@@ -82,10 +82,19 @@ public class SarahService {
         try {
             JsonNode node = mapper.readTree(output);
             validateGeneratedShape(request.artifactType(), node);
+
+            // Generation can take long enough for membership or resource access to change.
+            // Recheck the source workspace and every source before persisting the result.
+            UUID currentDestination = authorization.privateArtifactDestinationForGeneration(cardId, userId);
+            if (!destinationCardId.equals(currentDestination)) {
+                throw new com.lumira.backend.common.error.ResourceNotFoundException("Course Space not found");
+            }
+            request.sourceResourceIds().forEach(id -> contexts.requireContextualResource(cardId, id, userId));
+
             Object artifact = switch (request.artifactType()) {
-                case FLASHCARDSET -> flashcardSets.create(cardId, userId, mapper.treeToValue(node, FlashcardSetCreateRequest.class));
-                case QUIZ -> quizzes.create(cardId, userId, mapper.treeToValue(node, QuizCreateRequest.class));
-                case STUDYSET -> studySets.create(cardId, userId, mapper.treeToValue(node, StudySetCreateRequest.class));
+                case FLASHCARDSET -> flashcardSets.create(destinationCardId, userId, mapper.treeToValue(node, FlashcardSetCreateRequest.class));
+                case QUIZ -> quizzes.create(destinationCardId, userId, mapper.treeToValue(node, QuizCreateRequest.class));
+                case STUDYSET -> studySets.create(destinationCardId, userId, mapper.treeToValue(node, StudySetCreateRequest.class));
             };
             return new SarahGeneratedArtifact(request.artifactType(), artifact,
                     new SarahGeneratedArtifact.Provenance("SARAH", request.sourceResourceIds().stream()

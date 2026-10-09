@@ -237,6 +237,11 @@ Notes, Quizzes, Flashcards, Study Sets, Summaries, and **Sarah
 conversations** default to **private**, shared only via an explicit
 per-item toggle.
 
+AD-084 supersedes the conversion-time default for non-Resource study
+artifacts: enabling sharing creates Resource shares only. Existing Notes,
+Study Sets, Quizzes, and Flashcard Sets stay private until explicitly
+shared. Their creation on a Course Space also creates no share record.
+
 **AD-045 (mechanism)** — Sharing is an **explicit share record** linking
 an artifact to the Course Space it's exposed through — **not** a same-row
 boolean flag on the artifact. This is the same reference-based approach
@@ -567,7 +572,9 @@ made:
   linking existing `app_user` rows remains deferred under AD-082. Firebase
   Authentication itself and the UID-to-`app_user.id` boundary are decided.
 - Exact `QuizAttempt`/flashcard-progress schema (§14).
-- Offline/download capability (`DECISIONS.md`'s standing extension point).
+- Offline Course Space read snapshots and explicit resource-file
+  availability (AD-084); broader offline writes, automatic bulk downloads,
+  and generalized conflict resolution remain deferred.
 - Resource/File Processing specification (file types, MIME validation,
   size limits, extraction, OCR, multimodal, page/region coordinates,
   spreadsheet handling, failure/retry) — a separate engineering document,

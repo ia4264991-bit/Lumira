@@ -10,11 +10,16 @@ data class CardDto(
     val color: String = "#6687E8",
     val isShared: Boolean = false,
     val role: String? = null,
-    val createdAt: String? = null
+    val createdAt: String? = null,
+    val memberCardId: String? = null,
+    val shareApproval: Boolean? = null
 )
 
 @Serializable
 data class CreateCardRequest(val name: String, val color: String)
+
+@Serializable
+data class RenameCardRequest(val name: String)
 
 @Serializable
 data class ShareLinkDto(val shareToken: String, val url: String, val requireApproval: Boolean)

@@ -74,7 +74,8 @@ public class CourseSpaceService {
         return cardRepository.findSharedCardsForUser(userId, MembershipStatus.ACTIVE,
                         PageRequest.of(page, pageSize)).getContent()
                 .stream().map(row -> SharedCardResponse.from((Card) row[0],
-                        row[1] == null ? MembershipRole.OWNER : (MembershipRole) row[1])).toList();
+                        row[1] == null ? MembershipRole.OWNER : (MembershipRole) row[1],
+                        row[2] == null ? ((Card) row[0]).getId() : (UUID) row[2])).toList();
     }
 
     public Card enableSharing(UUID cardId, UUID actorId) {
@@ -82,7 +83,7 @@ public class CourseSpaceService {
         requireOwner(card, actorId);
         if (!card.isShared()) {
             card.setShared(true);
-            resourceShareService.activateAllForCard(card.getId());
+            resourceShareService.activateResourcesForCard(card.getId());
             CardMembership ownerMembership = membershipRepository.findFirstByCardIdAndUserIdAndStatusIn(
                     card.getId(), actorId, List.of(MembershipStatus.ACTIVE)).orElse(null);
             if (ownerMembership == null) {

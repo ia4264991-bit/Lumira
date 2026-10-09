@@ -12,19 +12,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val LightColors = lightColorScheme(
-    primary = BluePrimary,
+    primary = IndigoPrimary,
     onPrimary = SurfaceLight,
-    primaryContainer = BlueContainer,
-    secondary = BluePrimaryDark,
+    primaryContainer = IndigoContainer,
+    secondary = IndigoPrimaryDark,
     error = ErrorRed,
     background = SurfaceLight,
     surface = SurfaceLight
 )
 
 private val DarkColors = darkColorScheme(
-    primary = BlueContainer,
+    primary = IndigoContainer,
     onPrimary = SurfaceDark,
-    secondary = BluePrimary,
+    secondary = IndigoPrimary,
     error = ErrorRed,
     background = SurfaceDark,
     surface = SurfaceDark
@@ -33,7 +33,7 @@ private val DarkColors = darkColorScheme(
 @Composable
 fun AiPdfReaderTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
