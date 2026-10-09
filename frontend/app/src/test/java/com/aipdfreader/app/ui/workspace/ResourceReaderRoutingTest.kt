@@ -14,15 +14,16 @@ class ResourceReaderRoutingTest {
     }
 
     @Test
-    fun nonPdfFilesUseTheExplicitExternalViewerFallback() {
+    fun docxAndPptxUseTheInAppOfficePreviewPathInsteadOfThePdfRenderer() {
         assertFalse(shouldOpenInVisionPdfReader("image/jpeg", "diagram.jpg"))
         assertFalse(shouldOpenInVisionPdfReader("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "notes.docx"))
+        assertFalse(shouldOpenInVisionPdfReader("application/vnd.openxmlformats-officedocument.presentationml.presentation", "slides.pptx"))
     }
 
     @Test
     fun mimeTypeFallsBackToCommonFileExtensionsWhenMetadataIsGeneric() {
         assertEquals("application/msword", resolvedResourceMimeType("application/octet-stream", "lecture.doc"))
-        assertEquals("application/vnd.ms-powerpoint", resolvedResourceMimeType(null, "slides.ppt"))
+        assertEquals("application/vnd.openxmlformats-officedocument.presentationml.presentation", resolvedResourceMimeType(null, "slides.pptx"))
         assertEquals("application/vnd.ms-excel", resolvedResourceMimeType("", "marks.xls"))
         assertEquals("audio/mpeg", resolvedResourceMimeType("application/octet-stream", "recording.mp3"))
         assertEquals("video/mp4", resolvedResourceMimeType(null, "lesson.mp4"))

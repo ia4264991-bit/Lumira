@@ -71,9 +71,9 @@ focused, but a natural extension.
 The Firebase SDK owns the sign-in session and ID-token refresh lifecycle. `AuthInterceptor` attaches the current Firebase ID token as a Bearer token to Vision API requests; the app does not store a separate Vision token or log token contents.
 
 **Account provisioning is deferred by AD-082.** Firebase sign-in can succeed before a trusted onboarding flow creates the matching Vision user. Until that mapping exists, protected API calls explain that this account is not linked. The app does not link identities by email.
-## 5. Current navigation and PDF flow
+## 5. Current navigation and reader flow
 
-The app opens to Firebase sign-in or the backend-backed Cards / Course Spaces home. From a Card workspace, the user can upload supported PDFs, Office documents, text files, and images; create Notes and Study Sets; build/take Quizzes; review Flashcards; ask Sarah; see Course Space members and Updates; and view in-app notifications. The **On this phone** shelf stores picked files in app-private storage before they are added to a Card. PDFs open in the app's Reader; other formats open in a compatible phone app. Supported files uploaded to a Card are processed by the backend, including OCR for images and scanned pages.
+The app opens to Firebase sign-in or the backend-backed Cards / Course Spaces home. From a Card workspace, the user can upload supported PDFs, Office documents, text files, and images; create Notes and Study Sets; build/take Quizzes; review Flashcards; ask Sarah; see Course Space members and Updates; and view in-app notifications. The **On this phone** shelf stores picked files in app-private storage before they are added to a Card. PDFs open in Vision's continuous-scroll PDF reader. DOCX Word documents and PPTX presentations open in Vision's offline, read-only Office preview, including paragraphs, tables, embedded images, and slide-by-slide content. Other recognized file types use Vision's built-in previews; unsupported formats show an explanation instead of an Android app chooser. Supported files uploaded to a Card are processed by the backend, including OCR for images and scanned pages.
 
 New accounts continue through a short animated learner setup (name, learning goal, interests, experience, and daily study target) with an optional profile photo. Those profile details are stored locally per Firebase UID for now; they do not create or provision a backend Vision account.
 
@@ -88,9 +88,10 @@ Sarah requires a backend Resource because a file kept only in **On this phone** 
 - Authentication: Firebase email/password; ID tokens attach to Vision requests.
 - Cards/Course Spaces: CardApi, CardHomeViewModel, and Card workspace sharing/member UI.
 - Study features: DomainApi and the workspace view model call resource, Note, Study Set, Quiz, Flashcard, Sarah, event, and notification endpoints.
-- Local files: Room records and app-private storage for PDFs and other picked files; non-PDF files open through compatible phone apps.
+- Local files: Room records and app-private storage for PDFs and other picked files; supported formats open in Vision's in-app readers without an external app chooser.
 - Offline study: device-local personal Cards, their materials, and Notes are persisted in Room/app-private storage under AD-083.
 - PDF: existing Room library, local renderer, text extractor, adjustable lasso selection, and page-based Sarah context for Card Resources.
+- Office documents: DOCX and PPTX are parsed locally for read-only viewing, so cached copies also open offline. Legacy binary DOC/PPT and advanced Office layout features are not supported by the current Resource Processing MVP.
 - Material processing: supported Card uploads are extracted server-side; backend OCR handles images, image-only PDF pages, and embedded document images. The Android reader itself does not perform OCR.
 - Networking: Retrofit, Kotlin serialization, OkHttp, and Hilt. The client contains no provider keys or authoritative authorization rules.
 

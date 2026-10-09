@@ -11,16 +11,26 @@ import android.widget.MediaController
 import android.widget.VideoView
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -38,18 +48,30 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -124,6 +146,8 @@ fun InAppResourceViewer(
                         Text(result.content, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace,
                             softWrap = true, color = MaterialTheme.colorScheme.onSurface)
                     }
+                    is ResourcePreview.Word -> WordDocumentContent(result.document, Modifier.padding(padding))
+                    is ResourcePreview.Presentation -> PresentationContent(result.document, Modifier.padding(padding))
                     is ResourcePreview.Archive -> Column(
                         Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -152,11 +176,13 @@ fun InAppResourceViewer(
     }
 }
 
-private enum class PreviewKind { IMAGE, TEXT, OFFICE_PACKAGE, ARCHIVE, AUDIO, VIDEO, UNSUPPORTED }
+private enum class PreviewKind { IMAGE, TEXT, WORD, PRESENTATION, OFFICE_PACKAGE, ARCHIVE, AUDIO, VIDEO, UNSUPPORTED }
 
 private sealed interface ResourcePreview {
     data class Image(val bitmap: Bitmap) : ResourcePreview
     data class Text(val content: String) : ResourcePreview
+    data class Word(val document: WordDocumentPreview) : ResourcePreview
+    data class Presentation(val document: PowerPointDocumentPreview) : ResourcePreview
     data class Archive(val entries: List<String>, val truncated: Boolean) : ResourcePreview
     data class Unsupported(val message: String) : ResourcePreview
 }
@@ -165,7 +191,9 @@ private fun previewKind(extension: String, mimeType: String): PreviewKind = when
     extension in setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "avif") -> PreviewKind.IMAGE
     extension in setOf("mp3", "wav", "m4a", "aac", "ogg", "flac", "wma", "aif", "aiff", "amr", "mid", "midi", "opus") || mimeType.startsWith("audio/") -> PreviewKind.AUDIO
     extension in setOf("mp4", "mov", "avi", "wmv", "mkv", "webm", "m4v", "mpeg", "mpg", "3gp", "flv", "ogv", "ts", "mts", "m2ts") || mimeType.startsWith("video/") -> PreviewKind.VIDEO
-    extension in setOf("docx", "docm", "pptx", "pptm", "xlsx", "xlsm", "odt", "ods", "odp", "epub") -> PreviewKind.OFFICE_PACKAGE
+    extension == "docx" -> PreviewKind.WORD
+    extension == "pptx" -> PreviewKind.PRESENTATION
+    extension in setOf("docm", "pptm", "xlsx", "xlsm", "odt", "ods", "odp", "epub") -> PreviewKind.OFFICE_PACKAGE
     extension in setOf("zip", "imscc", "h5p", "mbz", "cbz", "kmz") -> PreviewKind.ARCHIVE
     extension in TEXT_EXTENSIONS || mimeType.startsWith("text/") || mimeType.contains("json") || mimeType.contains("xml") -> PreviewKind.TEXT
     else -> PreviewKind.UNSUPPORTED
@@ -184,12 +212,161 @@ private fun loadPreview(context: Context, uri: Uri, displayName: String, kind: P
     when (kind) {
         PreviewKind.IMAGE -> ResourcePreview.Image(decodeSampledBitmap(context, uri))
         PreviewKind.TEXT -> ResourcePreview.Text(readText(context.contentResolver.openInputStream(uri)!!, MAX_TEXT_BYTES))
+        PreviewKind.WORD -> ResourcePreview.Word(OfficeDocumentParser.parseWord(
+            context.contentResolver.openInputStream(uri) ?: error("File is unavailable.")))
+        PreviewKind.PRESENTATION -> ResourcePreview.Presentation(OfficeDocumentParser.parsePresentation(
+            context.contentResolver.openInputStream(uri) ?: error("File is unavailable.")))
         PreviewKind.OFFICE_PACKAGE -> ResourcePreview.Text(extractPackageText(context.contentResolver.openInputStream(uri)!!, displayName))
         PreviewKind.ARCHIVE -> readArchive(context.contentResolver.openInputStream(uri)!!)
         else -> ResourcePreview.Unsupported("Vision does not have a built-in reader for this file format yet.")
     }
 } catch (_: Exception) {
     ResourcePreview.Unsupported("Vision couldn’t read this file. It may be damaged, encrypted, or in an unsupported format.")
+}
+
+@Composable
+private fun WordDocumentContent(document: WordDocumentPreview, modifier: Modifier = Modifier) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Text("Word document · read-only", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        itemsIndexed(document.blocks) { _, block ->
+            when (block) {
+                is WordParagraphBlock -> WordParagraph(block)
+                is WordTableBlock -> WordTable(block)
+                is WordImageBlock -> OfficeImagePreview(block.image)
+            }
+        }
+    }
+}
+
+@Composable
+private fun WordParagraph(paragraph: WordParagraphBlock) {
+    val content = buildAnnotatedString {
+        if (paragraph.bullet) append("•  ")
+        paragraph.runs.forEach { run ->
+            val style = SpanStyle(
+                fontWeight = if (run.bold) FontWeight.Bold else FontWeight.Normal,
+                fontStyle = if (run.italic) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
+                textDecoration = if (run.underline) androidx.compose.ui.text.style.TextDecoration.Underline else null
+            )
+            pushStyle(style)
+            append(run.text)
+            pop()
+        }
+    }
+    val textStyle = when (paragraph.headingLevel) {
+        0 -> MaterialTheme.typography.headlineMedium
+        1 -> MaterialTheme.typography.headlineSmall
+        2 -> MaterialTheme.typography.titleLarge
+        in 3..6 -> MaterialTheme.typography.titleMedium
+        -1 -> MaterialTheme.typography.titleSmall
+        else -> MaterialTheme.typography.bodyLarge
+    }
+    Text(content, style = textStyle, color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.fillMaxWidth().padding(vertical = if (paragraph.headingLevel == null) 2.dp else 5.dp))
+}
+
+@Composable
+private fun WordTable(table: WordTableBlock) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column {
+            table.rows.forEachIndexed { rowIndex, cells ->
+                Row(Modifier.fillMaxWidth()) {
+                    cells.forEach { cell ->
+                        Text(cell.ifBlank { " " }, Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 7.dp),
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+                if (rowIndex != table.rows.lastIndex) androidx.compose.material3.HorizontalDivider()
+            }
+        }
+    }
+}
+
+@Composable
+private fun PresentationContent(document: PowerPointDocumentPreview, modifier: Modifier = Modifier) {
+    val aspectRatio = (document.widthEmu.toFloat() / document.heightEmu.toFloat()).coerceIn(0.5f, 3f)
+    LazyColumn(
+        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Text("PowerPoint · ${document.slides.size} slides · read-only", Modifier.padding(horizontal = 4.dp),
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        itemsIndexed(document.slides) { index, slide ->
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Slide ${index + 1}", Modifier.padding(start = 4.dp),
+                    style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    BoxWithConstraints(
+                        Modifier.fillMaxWidth().aspectRatio(aspectRatio)
+                            .clip(RoundedCornerShape(12.dp)).background(Color.White)
+                    ) {
+                        slide.elements.forEach { element ->
+                            val elementModifier = Modifier
+                                .offset(x = maxWidth * element.x, y = maxHeight * element.y)
+                                .size(width = maxWidth * element.width, height = maxHeight * element.height)
+                            when (element) {
+                                is PowerPointTextElement -> {
+                                    val scaledFont = (element.fontSizePoints * maxWidth.value /
+                                        (document.widthEmu.toFloat() / 12700f)).coerceIn(7f, 48f)
+                                    Text(element.text, modifier = elementModifier.padding(2.dp),
+                                        color = Color(0xFF202124),
+                                        fontSize = scaledFont.sp,
+                                        fontWeight = if (element.bold) FontWeight.Bold else FontWeight.Normal,
+                                        textAlign = TextAlign.Start, overflow = TextOverflow.Clip)
+                                }
+                                is PowerPointImageElement -> OfficeImagePreview(element.image, elementModifier)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OfficeImagePreview(image: OfficeImage, modifier: Modifier = Modifier) {
+    val bitmap by produceState<Bitmap?>(initialValue = null, key1 = image.bytes) {
+        value = withContext(Dispatchers.IO) { decodeOfficeImage(image.bytes) }
+    }
+    val decodedBitmap = bitmap
+    if (decodedBitmap == null) {
+        Text("Image preview isn’t available", modifier.padding(8.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+    } else {
+        Image(decodedBitmap.asImageBitmap(), contentDescription = "Image in document", modifier = modifier
+            .fillMaxWidth().heightIn(max = 440.dp), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
+    }
+}
+
+private fun decodeOfficeImage(bytes: ByteArray): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    val longestEdge = maxOf(bounds.outWidth, bounds.outHeight)
+    if (longestEdge <= 0) return null
+    var sampleSize = 1
+    while (longestEdge / sampleSize > 1800) sampleSize *= 2
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
+        BitmapFactory.Options().apply { inSampleSize = sampleSize })
 }
 
 private fun decodeSampledBitmap(context: Context, uri: Uri): Bitmap {
